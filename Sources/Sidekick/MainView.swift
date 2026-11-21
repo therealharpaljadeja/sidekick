@@ -178,7 +178,7 @@ private struct SettingsPane: View {
                     SettingRow("Width", caption: "\(Int(panelWidth)) pt") {
                         Slider(value: $panelWidth, in: 440...1000, step: 10).frame(width: 180)
                     }
-                    SettingRow("Lines", caption: "How much of the script is visible at once.") {
+                    SettingRow("Lines", caption: "Lines in full view. The next one peeks in, faded, below.") {
                         Stepper(value: $lineCount, in: 1...4) {
                             Text("\(lineCount)")
                                 .font(Theme.intern(13, .medium))
@@ -186,7 +186,7 @@ private struct SettingsPane: View {
                                 .foregroundColor(Theme.text)
                         }
                     }
-                    SettingRow("Show spoken words", caption: "Keep the last few words you said, dimmed, before the next one.") {
+                    SettingRow("Show spoken words", caption: "Keep the words you already said on the current line, dimmed.") {
                         Toggle("", isOn: $showSpoken).toggleStyle(MonoSwitchStyle())
                     }
                 }
