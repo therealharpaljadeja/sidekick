@@ -1,0 +1,70 @@
+import Carbon.HIToolbox
+import Foundation
+
+/// System-wide shortcuts via Carbon hot keys (no Accessibility permission needed).
+final class HotKeyCenter {
+    static let shared = HotKeyCenter()
+
+    private var handlers: [UInt32: () -> Void] = [:]
+    private var refs: [EventHotKeyRef] = []
+    private var nextID: UInt32 = 1
+    private var installed = false
+
+    func register(keyCode: Int, modifiers: Int, handler: @escaping () -> Void) {
+        installHandlerIfNeeded()
+        let id = EventHotKeyID(signature: OSType(0x5344_4B4B), id: nextID)
+        var ref: EventHotKeyRef?
+        let status = RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), id, GetApplicationEventTarget(), 0, &ref)
+        guard status == noErr, let ref else { return }
+        refs.append(ref)
+        handlers[nextID] = handler
+        nextID += 1
+    }
+
+    fileprivate func fire(_ id: UInt32) {
+        handlers[id]?()
+    }
+
+    private func installHandlerIfNeeded() {
+        guard !installed else { return }
+        installed = true
+        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
+            var hotKeyID = EventHotKeyID()
+            let status = GetEventParameter(
+                event,
+                EventParamName(kEventParamDirectObject),
+                EventParamType(typeEventHotKeyID),
+                nil,
+                MemoryLayout<EventHotKeyID>.size,
+                nil,
+                &hotKeyID
+            )
+            guard status == noErr else { return status }
+            let id = hotKeyID.id
+            DispatchQueue.main.async { HotKeyCenter.shared.fire(id) }
+            return noErr
+        }, 1, &spec, nil, nil)
+    }
+}
+
+enum HotKeys {
+    static let shortcuts: [(keys: String, action: String)] = [
+        ("⌥⌘P", "Start · pause · resume"),
+        ("⌥⌘R", "Restart from the top"),
+        ("⌥⌘←", "Back one sentence"),
+        ("⌥⌘→", "Skip to next sentence"),
+        ("⌥⌘.", "Stop and hide"),
+    ]
+
+    @MainActor
+    static func registerDefaults(for prompter: Prompter) {
+        let mods = cmdKey | optionKey
+        let center = HotKeyCenter.shared
+        center.register(keyCode: kVK_ANSI_P, modifiers: mods) { MainActor.assumeIsolated { prompter.primaryAction() } }
+        center.register(keyCode: kVK_ANSI_R, modifiers: mods) { MainActor.assumeIsolated { prompter.restart() } }
+        center.register(keyCode: kVK_LeftArrow, modifiers: mods) { MainActor.assumeIsolated { prompter.previousSentence() } }
+        center.register(keyCode: kVK_RightArrow, modifiers: mods) { MainActor.assumeIsolated { prompter.nextSentence() } }
+        center.register(keyCode: kVK_ANSI_Period, modifiers: mods) { MainActor.assumeIsolated { prompter.stop() } }
+    }
+}
