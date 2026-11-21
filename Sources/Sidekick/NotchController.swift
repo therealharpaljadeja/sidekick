@@ -72,7 +72,7 @@ final class NotchPanel: NSPanel {
 /// accepts mouse events while the pointer is over the visible black shape.
 @MainActor
 final class NotchController {
-    private let panel = NotchPanel()
+    private var panel = NotchPanel()
     private let prompter: Prompter
     private let geometry = NotchGeometry()
     private var monitors: [Any] = []
@@ -91,6 +91,7 @@ final class NotchController {
 
         reposition()
         panel.orderFrontRegardless()
+        WindowPrivacy.onRehide { [weak self] in self?.rebuildPanelIfCapturable() }
 
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .sink { [weak self] _ in self?.reposition() }
@@ -110,6 +111,21 @@ final class NotchController {
         if let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { event in handler(); return event }) {
             monitors.append(local)
         }
+    }
+
+    private func rebuildPanelIfCapturable() {
+        guard WindowPrivacy.isCapturable(panel) else { return }
+        let old = panel
+        let fresh = NotchPanel()
+        let content = old.contentView
+        old.contentView = nil
+        fresh.contentView = content
+        fresh.sharingType = WindowPrivacy.sharingType
+        fresh.ignoresMouseEvents = old.ignoresMouseEvents
+        fresh.setFrame(old.frame, display: true)
+        fresh.orderFrontRegardless()
+        old.orderOut(nil)
+        panel = fresh
     }
 
     private func reposition() {
