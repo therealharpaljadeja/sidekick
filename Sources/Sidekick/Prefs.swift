@@ -1,5 +1,6 @@
 import AppKit
 import CoreText
+import Speech
 
 enum Prefs {
     static let script = "script"
@@ -21,9 +22,15 @@ enum Prefs {
         ])
     }
 
+    /// The user's locale if speech recognition supports it (e.g. `en_001` isn't), else en-US.
     static var defaultLocaleID: String {
-        let current = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
-        return current.hasPrefix("en") ? current : "en-US"
+        let supported = Set(SFSpeechRecognizer.supportedLocales().map { $0.identifier.replacingOccurrences(of: "_", with: "-") })
+        let current = Locale.current
+        let candidates = [
+            current.identifier.replacingOccurrences(of: "_", with: "-"),
+            [current.language.languageCode?.identifier, current.region?.identifier].compactMap { $0 }.joined(separator: "-"),
+        ]
+        return candidates.first { $0.hasPrefix("en") && supported.contains($0) } ?? "en-US"
     }
 
     static var defaults: UserDefaults { .standard }

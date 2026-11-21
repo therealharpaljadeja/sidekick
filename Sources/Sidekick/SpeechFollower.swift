@@ -58,9 +58,14 @@ final class SpeechFollower: ObservableObject {
         self.recognizer = recognizer
         isOnDevice = recognizer.supportsOnDeviceRecognition
 
+        // With no input device the node still reports a 2ch output format, but installTap raises
+        // an Objective-C exception, so check for a device and a valid hardware format first.
+        guard AVCaptureDevice.default(for: .audio) != nil else { throw FollowerError.noMicrophone }
         let input = engine.inputNode
+        let hardware = input.inputFormat(forBus: 0)
         let format = input.outputFormat(forBus: 0)
-        guard format.channelCount > 0, format.sampleRate > 0 else { throw FollowerError.noMicrophone }
+        guard hardware.channelCount > 0, hardware.sampleRate > 0,
+              format.channelCount > 0, format.sampleRate > 0 else { throw FollowerError.noMicrophone }
 
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.makeTap(box: box, owner: self))
