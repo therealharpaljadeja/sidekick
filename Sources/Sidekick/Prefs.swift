@@ -8,7 +8,6 @@ enum Prefs {
     static let fontSize = "fontSize"
     static let lineCount = "lineCount"
     static let panelWidth = "panelWidth"
-    static let showSpoken = "showSpoken"
     static let localeID = "localeID"
 
     static func register() {
@@ -17,7 +16,6 @@ enum Prefs {
             fontSize: 18.0,
             lineCount: 2,
             panelWidth: 620.0,
-            showSpoken: false,
             localeID: defaultLocaleID,
         ])
     }

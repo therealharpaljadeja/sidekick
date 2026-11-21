@@ -8,7 +8,6 @@ struct NotchView: View {
     @AppStorage(Prefs.fontSize) private var fontSize = 18.0
     @AppStorage(Prefs.lineCount) private var lineCount = 2
     @AppStorage(Prefs.panelWidth) private var panelWidth = 620.0
-    @AppStorage(Prefs.showSpoken) private var showSpoken = false
 
     private var expanded: Bool { prompter.isPresenting }
 
@@ -54,8 +53,7 @@ struct NotchView: View {
                 cursor: prompter.cursor,
                 fontSize: fontSize,
                 lines: lineCount,
-                width: size.width - 52,
-                showSpoken: showSpoken
+                width: size.width - 52
             )
             .padding(.horizontal, 26)
             .padding(.top, NotchLayout.textTopPadding)
@@ -101,14 +99,13 @@ private struct StatusLabel: View {
 }
 
 /// The whole script rolling up like credits: the line you're on sits at the top, the next few
-/// words are highlighted, and the lines below fade out so you can tell more is coming.
+/// words are highlighted (everything else stays normal grey), and the lines below fade out so you can tell more is coming.
 private struct PromptText: View {
     let tokens: [ScriptToken]
     let cursor: Int
     let fontSize: Double
     let lines: Int
     let width: CGFloat
-    let showSpoken: Bool
 
     private static let highlightedWords = 6
 
@@ -155,9 +152,7 @@ private struct PromptText: View {
     }
 
     private func color(for index: Int) -> Color {
-        if index < cursor { return showSpoken ? Color(white: 0.3) : .clear }
-        if index < cursor + Self.highlightedWords { return .white }
-        return Color(white: 0.46)
+        (cursor..<cursor + Self.highlightedWords).contains(index) ? .white : Color(white: 0.46)
     }
 
     /// Solid over the full lines, then fading through the line that peeks in below.

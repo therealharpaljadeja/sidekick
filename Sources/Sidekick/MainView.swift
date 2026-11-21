@@ -158,7 +158,6 @@ private struct SettingsPane: View {
     @AppStorage(Prefs.fontSize) private var fontSize = 18.0
     @AppStorage(Prefs.lineCount) private var lineCount = 2
     @AppStorage(Prefs.panelWidth) private var panelWidth = 620.0
-    @AppStorage(Prefs.showSpoken) private var showSpoken = false
     @AppStorage(Prefs.localeID) private var localeID = Prefs.defaultLocaleID
 
     var body: some View {
@@ -185,9 +184,6 @@ private struct SettingsPane: View {
                                 .monospacedDigit()
                                 .foregroundColor(Theme.text)
                         }
-                    }
-                    SettingRow("Show spoken words", caption: "Keep the words you already said on the current line, dimmed.") {
-                        Toggle("", isOn: $showSpoken).toggleStyle(MonoSwitchStyle())
                     }
                 }
 
