@@ -96,7 +96,9 @@ final class NotchController {
             .sink { [weak self] _ in self?.reposition() }
             .store(in: &cancellables)
         prompter.$isPresenting
-            .sink { [weak self] _ in DispatchQueue.main.async { self?.updateMouseHandling() } }
+            .sink { [weak self] _ in
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.updateMouseHandling() } }
+            }
             .store(in: &cancellables)
 
         let handler: () -> Void = { [weak self] in

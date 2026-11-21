@@ -194,7 +194,7 @@ private struct SettingsPane: View {
                 SettingsSection("Listening") {
                     SettingRow("Language", caption: "Recognition runs on-device when your Mac supports it.") {
                         Picker("", selection: $localeID) {
-                            ForEach(Self.locales, id: \.id) { locale in
+                            ForEach(Self.locales) { locale in
                                 Text(locale.name).tag(locale.id)
                             }
                         }
@@ -205,7 +205,7 @@ private struct SettingsPane: View {
 
                 SettingsSection("Shortcuts") {
                     VStack(alignment: .leading, spacing: 10) {
-                        ForEach(HotKeys.shortcuts, id: \.keys) { shortcut in
+                        ForEach(HotKeys.shortcuts) { shortcut in
                             HStack {
                                 Text(shortcut.action)
                                     .font(Theme.intern(13))
@@ -227,15 +227,19 @@ private struct SettingsPane: View {
         }
     }
 
-    private static let locales: [(id: String, name: String)] = {
+    private struct LanguageOption: Identifiable {
+        let id: String
+        let name: String
+    }
+
+    private static let locales: [LanguageOption] = {
         let current = Locale.current
         return SFSpeechRecognizer.supportedLocales()
-            .map { locale -> (String, String) in
+            .map { locale in
                 let id = locale.identifier.replacingOccurrences(of: "_", with: "-")
-                return (id, current.localizedString(forIdentifier: locale.identifier) ?? id)
+                return LanguageOption(id: id, name: current.localizedString(forIdentifier: locale.identifier) ?? id)
             }
-            .sorted { $0.1 < $1.1 }
-            .map { (id: $0.0, name: $0.1) }
+            .sorted { $0.name < $1.name }
     }()
 }
 

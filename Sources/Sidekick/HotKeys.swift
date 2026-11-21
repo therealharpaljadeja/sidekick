@@ -49,12 +49,18 @@ final class HotKeyCenter {
 }
 
 enum HotKeys {
-    static let shortcuts: [(keys: String, action: String)] = [
-        ("⌥⌘P", "Start · pause · resume"),
-        ("⌥⌘R", "Restart from the top"),
-        ("⌥⌘←", "Back one sentence"),
-        ("⌥⌘→", "Skip to next sentence"),
-        ("⌥⌘.", "Stop and hide"),
+    struct Shortcut: Identifiable {
+        let keys: String
+        let action: String
+        var id: String { keys }
+    }
+
+    static let shortcuts: [Shortcut] = [
+        Shortcut(keys: "⌥⌘P", action: "Start · pause · resume"),
+        Shortcut(keys: "⌥⌘R", action: "Restart from the top"),
+        Shortcut(keys: "⌥⌘←", action: "Back one sentence"),
+        Shortcut(keys: "⌥⌘→", action: "Skip to next sentence"),
+        Shortcut(keys: "⌥⌘.", action: "Stop and hide"),
     ]
 
     @MainActor
