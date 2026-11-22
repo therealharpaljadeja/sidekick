@@ -165,9 +165,9 @@ private struct PromptText: View {
         }
         .frame(width: width, height: height, alignment: .topLeading)
         .clipped()
+        .animation(.spring(response: 0.5, dampingFraction: 1), value: current)
+        .drawingGroup()
         .mask(fade)
-        .animation(.spring(response: 0.55, dampingFraction: 0.9), value: current)
-        .animation(.easeOut(duration: 0.18), value: cursor)
     }
 
     private func line(_ range: Range<Int>) -> some View {
