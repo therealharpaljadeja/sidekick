@@ -205,7 +205,8 @@ public enum Utterance {
     public static func isNew(_ words: [String], after previous: [String]) -> Bool {
         guard words.count < previous.count, let first = words.first?.lowercased(),
               let previousFirst = previous.first?.lowercased() else { return false }
-        if first != previousFirst, previous.prefix(3).dropFirst().contains(where: { $0.lowercased() == first }) {
+        let new = words.map { $0.lowercased() }, old = previous.map { $0.lowercased() }
+        if first != previousFirst, (1...2).contains(where: { old.dropFirst($0).starts(with: new) }) {
             return false
         }
         return first != previousFirst || words.count <= previous.count / 2
