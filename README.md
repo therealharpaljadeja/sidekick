@@ -15,7 +15,20 @@ cd sidekick
 ./Scripts/build-app.sh --install   # builds build/Sidekick.app, copies it to /Applications, launches it
 ```
 
-On first start, macOS asks for **Microphone** and **Speech Recognition** access. Sidekick has no Dock icon; it lives in the menu bar (speech bubble) and in the notch.
+On first start, macOS asks for **Microphone** and **Speech Recognition** access. Click the Dock icon to reopen the window after closing it.
+
+## Share a DMG
+
+```bash
+./Scripts/make-dmg.sh   # universal (Apple Silicon + Intel) build/Sidekick-<version>.dmg
+```
+
+Unsigned DMGs trigger a Gatekeeper warning on other Macs. To avoid it, sign and notarize with an Apple Developer ID:
+
+```bash
+xcrun notarytool store-credentials sidekick --apple-id you@example.com --team-id TEAMID
+SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" NOTARY_PROFILE=sidekick ./Scripts/make-dmg.sh
+```
 
 ## Using it
 
