@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import Speech
 import SwiftUI
 
@@ -158,7 +159,6 @@ private struct SettingsPane: View {
     @AppStorage(Prefs.fontSize) private var fontSize = 18.0
     @AppStorage(Prefs.lineCount) private var lineCount = 2
     @AppStorage(Prefs.panelWidth) private var panelWidth = 620.0
-    @AppStorage(Prefs.showSpoken) private var showSpoken = false
     @AppStorage(Prefs.localeID) private var localeID = Prefs.defaultLocaleID
 
     var body: some View {
@@ -166,7 +166,7 @@ private struct SettingsPane: View {
             VStack(alignment: .leading, spacing: 28) {
                 SettingsSection("Privacy") {
                     SettingRow("Hide from screen recordings",
-                               caption: "You see Sidekick; recordings, screenshots and screen shares don't. Turn off to show it in a demo.") {
+                               caption: "You see Sidekick; recordings, screenshots and screen shares don't. Turn off to show it in a demo. Shortcut below.") {
                         Toggle("", isOn: $hideFromCapture).toggleStyle(MonoSwitchStyle())
                     }
                 }
@@ -178,16 +178,13 @@ private struct SettingsPane: View {
                     SettingRow("Width", caption: "\(Int(panelWidth)) pt") {
                         Slider(value: $panelWidth, in: 440...1000, step: 10).frame(width: 180)
                     }
-                    SettingRow("Lines", caption: "How much of the script is visible at once.") {
+                    SettingRow("Lines", caption: "Lines in full view. The next one peeks in, faded, below.") {
                         Stepper(value: $lineCount, in: 1...4) {
                             Text("\(lineCount)")
                                 .font(Theme.intern(13, .medium))
                                 .monospacedDigit()
                                 .foregroundColor(Theme.text)
                         }
-                    }
-                    SettingRow("Show spoken words", caption: "Keep the last few words you said, dimmed, before the next one.") {
-                        Toggle("", isOn: $showSpoken).toggleStyle(MonoSwitchStyle())
                     }
                 }
 
@@ -205,6 +202,13 @@ private struct SettingsPane: View {
 
                 SettingsSection("Shortcuts") {
                     VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Hide · show in recordings")
+                                .font(Theme.intern(13))
+                                .foregroundColor(Theme.text)
+                            Spacer()
+                            ShortcutRecorder()
+                        }
                         ForEach(HotKeys.shortcuts) { shortcut in
                             HStack {
                                 Text(shortcut.action)
@@ -241,6 +245,62 @@ private struct SettingsPane: View {
             }
             .sorted { $0.name < $1.name }
     }()
+}
+
+/// Click, then press a new key combo. Esc cancels; ⌫ clears.
+private struct ShortcutRecorder: View {
+    @AppStorage(Prefs.privacyKeyCode) private var keyCode = PrivacyShortcut.defaultCombo.keyCode
+    @AppStorage(Prefs.privacyLabel) private var label = PrivacyShortcut.defaultCombo.label
+    @State private var recording = false
+    @State private var monitor: Any?
+
+    var body: some View {
+        Button(action: { recording ? stop() : start() }) {
+            Text(recording ? "Press keys…" : keyCode < 0 ? "None" : label)
+                .font(Theme.mono(12))
+                .foregroundColor(recording ? Theme.text : Theme.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.radius)
+                        .stroke(recording ? Theme.text : Theme.hairline, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Click to change. Esc cancels, Delete clears.")
+        .onDisappear { stop() }
+    }
+
+    private func start() {
+        recording = true
+        PrivacyShortcut.suspend()
+        HotKeyCenter.shared.isPaused = true
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let key = Int(event.keyCode)
+            if let combo = PrivacyShortcut.combo(from: event) {
+                if !PrivacyShortcut.set(combo) { NSSound.beep() }
+                stop()
+            } else if key == kVK_Escape {
+                stop()
+            } else if key == kVK_Delete || key == kVK_ForwardDelete {
+                PrivacyShortcut.set(nil)
+                stop()
+            } else {
+                NSSound.beep()
+            }
+            return nil
+        }
+    }
+
+    private func stop() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+        guard recording else { return }
+        recording = false
+        HotKeyCenter.shared.isPaused = false
+        PrivacyShortcut.register()
+    }
 }
 
 private struct SettingsSection<Content: View>: View {

@@ -1,5 +1,6 @@
 import AVFoundation
 import Speech
+import SidekickCore
 
 /// Streams the microphone into Apple's speech recognizer (on-device when available)
 /// and reports the words heard since the current recognition segment began.
@@ -31,6 +32,7 @@ final class SpeechFollower: ObservableObject {
     private var generation = 0
     private var recentFailures: [Date] = []
     private var configObserver: NSObjectProtocol?
+    private var lastWords: [String] = []
 
     /// Segments are rotated before Apple's ~1 minute per-request limit.
     private let segmentLength: TimeInterval = 50
@@ -58,9 +60,14 @@ final class SpeechFollower: ObservableObject {
         self.recognizer = recognizer
         isOnDevice = recognizer.supportsOnDeviceRecognition
 
+        // With no input device the node still reports a 2ch output format, but installTap raises
+        // an Objective-C exception, so check for a device and a valid hardware format first.
+        guard AVCaptureDevice.default(for: .audio) != nil else { throw FollowerError.noMicrophone }
         let input = engine.inputNode
+        let hardware = input.inputFormat(forBus: 0)
         let format = input.outputFormat(forBus: 0)
-        guard format.channelCount > 0, format.sampleRate > 0 else { throw FollowerError.noMicrophone }
+        guard hardware.channelCount > 0, hardware.sampleRate > 0,
+              format.channelCount > 0, format.sampleRate > 0 else { throw FollowerError.noMicrophone }
 
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.makeTap(box: box, owner: self))
@@ -111,6 +118,7 @@ final class SpeechFollower: ObservableObject {
         request.contextualStrings = contextualStrings
         box.request = request
 
+        lastWords = []
         onSegmentStart?()
         task = recognizer.recognitionTask(with: request, resultHandler: Self.makeResultHandler(owner: self, generation: current))
 
@@ -122,7 +130,13 @@ final class SpeechFollower: ObservableObject {
 
     fileprivate func handle(generation: Int, words: [String], isFinal: Bool, error: Error?) {
         guard generation == self.generation, state == .listening else { return }
-        if !words.isEmpty { onWords?(words) }
+        if !words.isEmpty {
+            // After a pause, macOS 26 starts a new utterance inside the same task: the transcript
+            // drops back to just the new words without a final result. Treat that as a new segment.
+            if Utterance.isNew(words, after: lastWords) { onSegmentStart?() }
+            lastWords = words
+            onWords?(words)
+        }
         guard isFinal || error != nil else { return }
 
         if let error, words.isEmpty, !Self.isBenign(error) {
@@ -143,7 +157,8 @@ final class SpeechFollower: ObservableObject {
     }
 
     fileprivate func updateLevel(_ value: Float) {
-        level = level * 0.6 + value * 0.4
+        let smoothed = level * 0.6 + value * 0.4
+        if abs(smoothed - level) > 0.02 || (smoothed == 0) != (level == 0) { level = smoothed }
     }
 
     private func observeConfigurationChanges() {
@@ -170,7 +185,7 @@ final class SpeechFollower: ObservableObject {
         return { [weak owner] buffer, _ in
             box.append(buffer)
             counter += 1
-            guard counter % 3 == 0 else { return }
+            guard counter % 4 == 0 else { return }
             let level = normalizedLevel(buffer)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { owner?.updateLevel(level) }

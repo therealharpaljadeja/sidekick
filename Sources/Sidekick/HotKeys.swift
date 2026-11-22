@@ -1,27 +1,40 @@
+import AppKit
 import Carbon.HIToolbox
-import Foundation
 
 /// System-wide shortcuts via Carbon hot keys (no Accessibility permission needed).
 final class HotKeyCenter {
     static let shared = HotKeyCenter()
 
     private var handlers: [UInt32: () -> Void] = [:]
-    private var refs: [EventHotKeyRef] = []
+    private var refs: [UInt32: EventHotKeyRef] = [:]
     private var nextID: UInt32 = 1
     private var installed = false
+    /// While recording a new shortcut, taken combos beep instead of running their command.
+    var isPaused = false
 
-    func register(keyCode: Int, modifiers: Int, handler: @escaping () -> Void) {
+    @discardableResult
+    func register(keyCode: Int, modifiers: Int, handler: @escaping () -> Void) -> UInt32? {
         installHandlerIfNeeded()
-        let id = EventHotKeyID(signature: OSType(0x5344_4B4B), id: nextID)
+        let id = nextID
         var ref: EventHotKeyRef?
-        let status = RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), id, GetApplicationEventTarget(), 0, &ref)
-        guard status == noErr, let ref else { return }
-        refs.append(ref)
-        handlers[nextID] = handler
+        let status = RegisterEventHotKey(
+            UInt32(keyCode), UInt32(modifiers), EventHotKeyID(signature: OSType(0x5344_4B4B), id: id),
+            GetApplicationEventTarget(), 0, &ref
+        )
+        guard status == noErr, let ref else { return nil }
+        refs[id] = ref
+        handlers[id] = handler
         nextID += 1
+        return id
+    }
+
+    func unregister(_ id: UInt32) {
+        if let ref = refs.removeValue(forKey: id) { UnregisterEventHotKey(ref) }
+        handlers[id] = nil
     }
 
     fileprivate func fire(_ id: UInt32) {
+        guard !isPaused else { return NSSound.beep() }
         handlers[id]?()
     }
 
@@ -72,5 +85,6 @@ enum HotKeys {
         center.register(keyCode: kVK_LeftArrow, modifiers: mods) { MainActor.assumeIsolated { prompter.previousSentence() } }
         center.register(keyCode: kVK_RightArrow, modifiers: mods) { MainActor.assumeIsolated { prompter.nextSentence() } }
         center.register(keyCode: kVK_ANSI_Period, modifiers: mods) { MainActor.assumeIsolated { prompter.stop() } }
+        PrivacyShortcut.register()
     }
 }

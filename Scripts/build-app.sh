@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Builds build/Sidekick.app. Pass --install to copy it to /Applications and launch it.
+# UNIVERSAL=1 builds for both Apple Silicon and Intel.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CONFIG="${CONFIG:-release}"
-swift build -c "$CONFIG"
-BIN="$(swift build -c "$CONFIG" --show-bin-path)/Sidekick"
+ARCH_FLAGS=()
+[[ "${UNIVERSAL:-}" == "1" ]] && ARCH_FLAGS=(--arch arm64 --arch x86_64)
+swift build -c "$CONFIG" ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"}
+BIN="$(swift build -c "$CONFIG" ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} --show-bin-path)/Sidekick"
 
 APP="build/Sidekick.app"
 rm -rf "$APP"
@@ -15,7 +18,9 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp Resources/Fonts/*.ttf Resources/Fonts/OFL.txt "$APP/Contents/Resources/Fonts/"
 
-codesign --force --sign "${SIGN_IDENTITY:--}" "$APP"
+SIGN_FLAGS=(--force --sign "${SIGN_IDENTITY:--}")
+[[ -n "${SIGN_IDENTITY:-}" ]] && SIGN_FLAGS+=(--options runtime --timestamp --entitlements Resources/Sidekick.entitlements)
+codesign "${SIGN_FLAGS[@]}" "$APP"
 echo "Built $APP"
 
 if [[ "${1:-}" == "--install" ]]; then
