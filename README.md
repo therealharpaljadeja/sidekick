@@ -2,6 +2,9 @@
 
 A teleprompter that lives in your MacBook notch. Paste your script, hit **⌥⌘P**, and talk. Sidekick listens, highlights the next words you need to say, and rolls the script up line by line like movie credits, right under the camera. It hides itself from screen recordings, screenshots and screen sharing, so your viewers never see it.
 
+> [!WARNING]
+> Sidekick is vibe coded: it was built quickly with AI and has not been reviewed or tested the way production software is. Use it at your own risk.
+
 ## Install
 
 Download `Sidekick-<version>.dmg`, open it and drag **Sidekick** into **Applications**. Builds without an Apple Developer ID signature are blocked on first launch; allow it in **System Settings → Privacy & Security → Open Anyway**, or run:
