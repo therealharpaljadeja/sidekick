@@ -8,7 +8,6 @@ struct NotchView: View {
     @AppStorage(Prefs.fontSize) private var fontSize = 18.0
     @AppStorage(Prefs.lineCount) private var lineCount = 2
     @AppStorage(Prefs.panelWidth) private var panelWidth = 620.0
-    @AppStorage(Prefs.showSpoken) private var showSpoken = false
 
     private var expanded: Bool { prompter.isPresenting }
 
@@ -41,10 +40,13 @@ struct NotchView: View {
             HStack(spacing: 0) {
                 StatusLabel()
                 Spacer(minLength: geometry.hasNotch ? geometry.notchSize.width + 16 : 16)
-                Text(progressLabel)
-                    .font(Theme.intern(11, .medium))
-                    .monospacedDigit()
-                    .foregroundColor(Theme.secondary)
+                HStack(spacing: 12) {
+                    PrivacyLight()
+                    Text(progressLabel)
+                        .font(Theme.intern(11, .medium))
+                        .monospacedDigit()
+                        .foregroundColor(Theme.secondary)
+                }
             }
             .padding(.horizontal, 26)
             .frame(height: geometry.notchSize.height)
@@ -54,7 +56,7 @@ struct NotchView: View {
                 cursor: prompter.cursor,
                 fontSize: fontSize,
                 lines: lineCount,
-                showSpoken: showSpoken
+                width: size.width - 52
             )
             .padding(.horizontal, 26)
             .padding(.top, NotchLayout.textTopPadding)
@@ -99,54 +101,159 @@ private struct StatusLabel: View {
     }
 }
 
-/// The script from the next word on. Spoken words fall away; the next word is brightest.
+/// Hollow when Sidekick is hidden from recordings; a lit dot when recordings can see it.
+private struct PrivacyLight: View {
+    @AppStorage(Prefs.hideFromCapture) private var hidden = true
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .stroke(Theme.tertiary, lineWidth: 1)
+                    .opacity(hidden ? 1 : 0)
+                Circle()
+                    .fill(Theme.text)
+                    .shadow(color: Theme.text.opacity(0.8), radius: 3)
+                    .opacity(hidden ? 0 : 1)
+            }
+            .frame(width: 6, height: 6)
+            Text(hidden ? "Hidden" : "In recordings")
+                .font(Theme.intern(11, .medium))
+                .foregroundColor(hidden ? Theme.secondary : Theme.text)
+                .lineLimit(1)
+        }
+        .animation(.easeOut(duration: 0.2), value: hidden)
+        .help(hidden ? "Hidden from screen recordings" : "Visible in screen recordings")
+    }
+}
+
+/// The whole script rolling up like credits: the line you're on sits at the top, the next few
+/// words are highlighted (everything else stays normal grey), and the lines below fade out so you can tell more is coming.
 private struct PromptText: View {
     let tokens: [ScriptToken]
     let cursor: Int
     let fontSize: Double
     let lines: Int
-    let showSpoken: Bool
+    let width: CGFloat
+
+    private static let highlightedWords = 6
+
+    private var lineHeight: CGFloat { CGFloat(fontSize) * NotchLayout.lineHeightMultiple }
+    private var tracking: CGFloat { fontSize >= 22 ? -0.2 : 0 }
+    private var height: CGFloat { lineHeight * (CGFloat(max(lines, 1)) + NotchLayout.peekLines) }
 
     var body: some View {
-        styledText
-            .font(Theme.intern(fontSize, .medium))
-            .tracking(fontSize >= 22 ? -0.2 : 0)
-            .lineSpacing(fontSize * (NotchLayout.lineHeightMultiple - 1.2))
-            .lineLimit(lines)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .animation(.easeOut(duration: 0.18), value: cursor)
+        if tokens.isEmpty {
+            message("Paste a script in Sidekick to begin.")
+        } else if cursor >= tokens.count {
+            message("That's a wrap.")
+        } else {
+            roll
+        }
     }
 
-    private var styledText: Text {
-        guard !tokens.isEmpty else {
-            return Text("Paste a script in Sidekick to begin.").foregroundColor(Theme.secondary)
-        }
-        guard cursor < tokens.count else {
-            return Text("That's a wrap.").foregroundColor(Theme.secondary)
-        }
-
-        var text = Text("")
-        if showSpoken {
-            for token in tokens[max(0, cursor - 3)..<cursor] {
-                text = text + Text(token.displayText).foregroundColor(Color(white: 0.28))
+    private var roll: some View {
+        let layout = CreditsLayout.shared.lines(for: tokens, width: width, fontSize: fontSize, tracking: tracking)
+        let current = layout.firstIndex { $0.contains(cursor) } ?? 0
+        let visible = max(0, current - 1)...min(layout.count - 1, current + max(lines, 1) + 1)
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(visible), id: \.self) { index in
+                line(layout[index])
+                    .frame(width: width, height: lineHeight, alignment: .leading)
+                    .offset(y: CGFloat(index - current) * lineHeight)
             }
         }
+        .frame(width: width, height: height, alignment: .topLeading)
+        .clipped()
+        .animation(.spring(response: 0.5, dampingFraction: 1), value: current)
+        .drawingGroup()
+        .mask(fade)
+    }
 
-        var inFirstSentence = true
-        let upcoming = tokens[cursor..<min(tokens.count, cursor + 80)]
-        for (offset, token) in upcoming.enumerated() {
-            let color: Color
-            if offset == 0 {
-                color = .white
-            } else if inFirstSentence {
-                color = Color(white: 0.74)
-            } else {
-                color = Color(white: 0.44)
-            }
-            text = text + Text(token.displayText).foregroundColor(color)
-            if token.endsSentence { inFirstSentence = false }
+    private func line(_ range: Range<Int>) -> some View {
+        range.reduce(Text("")) { text, index in
+            text + Text(tokens[index].displayText).foregroundColor(color(for: index))
         }
-        return text
+        .font(Theme.intern(fontSize, .medium))
+        .tracking(tracking)
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func color(for index: Int) -> Color {
+        (cursor..<cursor + Self.highlightedWords).contains(index) ? .white : Color(white: 0.46)
+    }
+
+    /// Solid over the full lines, then fading through the line that peeks in below.
+    private var fade: some View {
+        let full = CGFloat(max(lines, 1))
+        return LinearGradient(
+            stops: [
+                .init(color: .black, location: 0),
+                .init(color: .black, location: (full - 0.15) / (full + NotchLayout.peekLines)),
+                .init(color: .clear, location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    private func message(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.intern(fontSize, .medium))
+            .foregroundColor(Theme.secondary)
+            .frame(width: width, height: height, alignment: .topLeading)
+    }
+}
+
+/// Splits the script into the lines it wraps to at the notch width, as token ranges.
+@MainActor
+private final class CreditsLayout {
+    static let shared = CreditsLayout()
+
+    private var key: (tokens: [ScriptToken], width: CGFloat, fontSize: Double, tracking: CGFloat)?
+    private var cached: [Range<Int>] = []
+
+    func lines(for tokens: [ScriptToken], width: CGFloat, fontSize: Double, tracking: CGFloat) -> [Range<Int>] {
+        if let key, key.width == width, key.fontSize == fontSize, key.tracking == tracking, key.tokens == tokens {
+            return cached
+        }
+        let font = NSFont(name: Theme.Weight.medium.postScript, size: fontSize)
+            ?? .systemFont(ofSize: fontSize, weight: .medium)
+        let text = NSMutableString()
+        var tokenStarts: [Int] = []
+        for token in tokens {
+            tokenStarts.append(text.length)
+            text.append(token.displayText)
+        }
+        let string = NSAttributedString(string: text as String, attributes: [.font: font, .kern: tracking])
+        let typesetter = CTTypesetterCreateWithAttributedString(string)
+        var lineStarts: [Int] = []
+        var position = 0
+        // A little slack so SwiftUI's rendering never needs more room than CoreText measured.
+        let lineWidth = Double(max(width - 4, 40))
+        while position < string.length {
+            lineStarts.append(position)
+            position += max(CTTypesetterSuggestLineBreak(typesetter, position, lineWidth), 1)
+        }
+
+        var result: [Range<Int>] = []
+        var line = 0
+        var lineStart = 0
+        for (index, start) in tokenStarts.enumerated() {
+            var next = line
+            while next + 1 < lineStarts.count, lineStarts[next + 1] <= start { next += 1 }
+            if next != line {
+                if index > lineStart { result.append(lineStart..<index) }
+                lineStart = index
+                line = next
+            }
+        }
+        if lineStart < tokens.count { result.append(lineStart..<tokens.count) }
+
+        key = (tokens, width, fontSize, tracking)
+        cached = result
+        return result
     }
 }
 

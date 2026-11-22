@@ -8,8 +8,10 @@ enum Prefs {
     static let fontSize = "fontSize"
     static let lineCount = "lineCount"
     static let panelWidth = "panelWidth"
-    static let showSpoken = "showSpoken"
     static let localeID = "localeID"
+    static let privacyKeyCode = "privacyShortcutKeyCode"
+    static let privacyModifiers = "privacyShortcutModifiers"
+    static let privacyLabel = "privacyShortcutLabel"
 
     static func register() {
         UserDefaults.standard.register(defaults: [
@@ -17,8 +19,10 @@ enum Prefs {
             fontSize: 18.0,
             lineCount: 2,
             panelWidth: 620.0,
-            showSpoken: false,
             localeID: defaultLocaleID,
+            privacyKeyCode: PrivacyShortcut.defaultCombo.keyCode,
+            privacyModifiers: PrivacyShortcut.defaultCombo.modifiers,
+            privacyLabel: PrivacyShortcut.defaultCombo.label,
         ])
     }
 

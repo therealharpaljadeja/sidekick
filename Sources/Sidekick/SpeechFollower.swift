@@ -31,6 +31,7 @@ final class SpeechFollower: ObservableObject {
     private var generation = 0
     private var recentFailures: [Date] = []
     private var configObserver: NSObjectProtocol?
+    private var lastWords: [String] = []
 
     /// Segments are rotated before Apple's ~1 minute per-request limit.
     private let segmentLength: TimeInterval = 50
@@ -116,6 +117,7 @@ final class SpeechFollower: ObservableObject {
         request.contextualStrings = contextualStrings
         box.request = request
 
+        lastWords = []
         onSegmentStart?()
         task = recognizer.recognitionTask(with: request, resultHandler: Self.makeResultHandler(owner: self, generation: current))
 
@@ -127,7 +129,13 @@ final class SpeechFollower: ObservableObject {
 
     fileprivate func handle(generation: Int, words: [String], isFinal: Bool, error: Error?) {
         guard generation == self.generation, state == .listening else { return }
-        if !words.isEmpty { onWords?(words) }
+        if !words.isEmpty {
+            // After a pause, macOS 26 starts a new utterance inside the same task: the transcript
+            // drops back to just the new words without a final result. Treat that as a new segment.
+            if Self.isNewUtterance(words, after: lastWords) { onSegmentStart?() }
+            lastWords = words
+            onWords?(words)
+        }
         guard isFinal || error != nil else { return }
 
         if let error, words.isEmpty, !Self.isBenign(error) {
@@ -148,7 +156,8 @@ final class SpeechFollower: ObservableObject {
     }
 
     fileprivate func updateLevel(_ value: Float) {
-        level = level * 0.6 + value * 0.4
+        let smoothed = level * 0.6 + value * 0.4
+        if abs(smoothed - level) > 0.02 || (smoothed == 0) != (level == 0) { level = smoothed }
     }
 
     private func observeConfigurationChanges() {
@@ -164,6 +173,13 @@ final class SpeechFollower: ObservableObject {
         }
     }
 
+    nonisolated static func isNewUtterance(_ words: [String], after previous: [String]) -> Bool {
+        guard words.count < previous.count, let first = words.first, let previousFirst = previous.first else {
+            return false
+        }
+        return first.lowercased() != previousFirst.lowercased() || words.count <= previous.count / 2
+    }
+
     private static func isBenign(_ error: Error) -> Bool {
         let nsError = error as NSError
         // 1110: no speech detected, 216/301: request cancelled/ended.
@@ -175,7 +191,7 @@ final class SpeechFollower: ObservableObject {
         return { [weak owner] buffer, _ in
             box.append(buffer)
             counter += 1
-            guard counter % 3 == 0 else { return }
+            guard counter % 4 == 0 else { return }
             let level = normalizedLevel(buffer)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { owner?.updateLevel(level) }

@@ -32,7 +32,7 @@ final class NotchGeometry: ObservableObject {
         let minWidth = notchSize.width + 200
         let w = min(max(CGFloat(width), minWidth), max(screenFrame.width - 40, minWidth))
         let lineHeight = CGFloat(fontSize) * NotchLayout.lineHeightMultiple
-        let textHeight = lineHeight * CGFloat(max(lines, 1))
+        let textHeight = lineHeight * (CGFloat(max(lines, 1)) + NotchLayout.peekLines)
         return CGSize(width: w.rounded(), height: (notchSize.height + NotchLayout.textTopPadding + textHeight + NotchLayout.bottomPadding).rounded())
     }
 }
@@ -40,7 +40,9 @@ final class NotchGeometry: ObservableObject {
 enum NotchLayout {
     static let lineHeightMultiple: CGFloat = 1.38
     static let textTopPadding: CGFloat = 6
-    static let bottomPadding: CGFloat = 16
+    static let bottomPadding: CGFloat = 10
+    /// How much of the next line peeks in, faded, below the full lines.
+    static let peekLines: CGFloat = 0.6
     static let canvas = CGSize(width: 1100, height: 420)
 }
 
