@@ -40,10 +40,13 @@ struct NotchView: View {
             HStack(spacing: 0) {
                 StatusLabel()
                 Spacer(minLength: geometry.hasNotch ? geometry.notchSize.width + 16 : 16)
-                Text(progressLabel)
-                    .font(Theme.intern(11, .medium))
-                    .monospacedDigit()
-                    .foregroundColor(Theme.secondary)
+                HStack(spacing: 12) {
+                    PrivacyLight()
+                    Text(progressLabel)
+                        .font(Theme.intern(11, .medium))
+                        .monospacedDigit()
+                        .foregroundColor(Theme.secondary)
+                }
             }
             .padding(.horizontal, 26)
             .frame(height: geometry.notchSize.height)
@@ -95,6 +98,32 @@ private struct StatusLabel: View {
         if prompter.isFinished { return "Done" }
         if prompter.message != nil { return "Needs attention" }
         return prompter.isListening ? "Listening" : "Paused"
+    }
+}
+
+/// Hollow when Sidekick is hidden from recordings; a lit dot when recordings can see it.
+private struct PrivacyLight: View {
+    @AppStorage(Prefs.hideFromCapture) private var hidden = true
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .stroke(Theme.tertiary, lineWidth: 1)
+                    .opacity(hidden ? 1 : 0)
+                Circle()
+                    .fill(Theme.text)
+                    .shadow(color: Theme.text.opacity(0.8), radius: 3)
+                    .opacity(hidden ? 0 : 1)
+            }
+            .frame(width: 6, height: 6)
+            Text(hidden ? "Hidden" : "In recordings")
+                .font(Theme.intern(11, .medium))
+                .foregroundColor(hidden ? Theme.secondary : Theme.text)
+                .lineLimit(1)
+        }
+        .animation(.easeOut(duration: 0.2), value: hidden)
+        .help(hidden ? "Hidden from screen recordings" : "Visible in screen recordings")
     }
 }
 
