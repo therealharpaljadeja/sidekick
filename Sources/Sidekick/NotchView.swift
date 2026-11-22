@@ -123,7 +123,7 @@ private struct PrivacyLight: View {
                 .lineLimit(1)
         }
         .animation(.easeOut(duration: 0.2), value: hidden)
-        .help(hidden ? "Hidden from screen recordings" : "Visible in screen recordings")
+        .help(hidden ? "Hidden from ScreenCaptureKit recorders (QuickTime, OBS, Zoom, screenshots). Legacy capture tools may still see it." : "Visible in screen recordings")
     }
 }
 

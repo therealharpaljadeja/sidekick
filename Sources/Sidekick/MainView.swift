@@ -275,6 +275,7 @@ private struct ShortcutRecorder: View {
     private func start() {
         recording = true
         PrivacyShortcut.suspend()
+        HotKeyCenter.shared.isPaused = true
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let key = Int(event.keyCode)
             if let combo = PrivacyShortcut.combo(from: event) {
@@ -297,6 +298,7 @@ private struct ShortcutRecorder: View {
         monitor = nil
         guard recording else { return }
         recording = false
+        HotKeyCenter.shared.isPaused = false
         PrivacyShortcut.register()
     }
 }

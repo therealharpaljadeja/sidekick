@@ -1,5 +1,6 @@
 import AVFoundation
 import Speech
+import SidekickCore
 
 /// Streams the microphone into Apple's speech recognizer (on-device when available)
 /// and reports the words heard since the current recognition segment began.
@@ -132,7 +133,7 @@ final class SpeechFollower: ObservableObject {
         if !words.isEmpty {
             // After a pause, macOS 26 starts a new utterance inside the same task: the transcript
             // drops back to just the new words without a final result. Treat that as a new segment.
-            if Self.isNewUtterance(words, after: lastWords) { onSegmentStart?() }
+            if Utterance.isNew(words, after: lastWords) { onSegmentStart?() }
             lastWords = words
             onWords?(words)
         }
@@ -171,13 +172,6 @@ final class SpeechFollower: ObservableObject {
                 try? self.start()
             }
         }
-    }
-
-    nonisolated static func isNewUtterance(_ words: [String], after previous: [String]) -> Bool {
-        guard words.count < previous.count, let first = words.first, let previousFirst = previous.first else {
-            return false
-        }
-        return first.lowercased() != previousFirst.lowercased() || words.count <= previous.count / 2
     }
 
     private static func isBenign(_ error: Error) -> Bool {

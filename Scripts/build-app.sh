@@ -19,7 +19,7 @@ cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp Resources/Fonts/*.ttf Resources/Fonts/OFL.txt "$APP/Contents/Resources/Fonts/"
 
 SIGN_FLAGS=(--force --sign "${SIGN_IDENTITY:--}")
-[[ -n "${SIGN_IDENTITY:-}" ]] && SIGN_FLAGS+=(--options runtime --timestamp)
+[[ -n "${SIGN_IDENTITY:-}" ]] && SIGN_FLAGS+=(--options runtime --timestamp --entitlements Resources/Sidekick.entitlements)
 codesign "${SIGN_FLAGS[@]}" "$APP"
 echo "Built $APP"
 

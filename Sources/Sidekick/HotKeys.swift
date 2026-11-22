@@ -1,5 +1,5 @@
+import AppKit
 import Carbon.HIToolbox
-import Foundation
 
 /// System-wide shortcuts via Carbon hot keys (no Accessibility permission needed).
 final class HotKeyCenter {
@@ -9,6 +9,8 @@ final class HotKeyCenter {
     private var refs: [UInt32: EventHotKeyRef] = [:]
     private var nextID: UInt32 = 1
     private var installed = false
+    /// While recording a new shortcut, taken combos beep instead of running their command.
+    var isPaused = false
 
     @discardableResult
     func register(keyCode: Int, modifiers: Int, handler: @escaping () -> Void) -> UInt32? {
@@ -32,6 +34,7 @@ final class HotKeyCenter {
     }
 
     fileprivate func fire(_ id: UInt32) {
+        guard !isPaused else { return NSSound.beep() }
         handlers[id]?()
     }
 

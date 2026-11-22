@@ -197,3 +197,17 @@ public struct ScriptFollower: Sendable {
         "here", "there", "now", "all", "im", "its", "thats", "lets", "dont", "from", "into", "about",
     ]
 }
+
+public enum Utterance {
+    /// After a pause the recognizer can restart its partial transcript with only the new words,
+    /// without a final result. Tell that apart from a revision of the same words, such as a
+    /// dropped leading filler, so the caller can reset its per-segment word count.
+    public static func isNew(_ words: [String], after previous: [String]) -> Bool {
+        guard words.count < previous.count, let first = words.first?.lowercased(),
+              let previousFirst = previous.first?.lowercased() else { return false }
+        if first != previousFirst, previous.prefix(3).dropFirst().contains(where: { $0.lowercased() == first }) {
+            return false
+        }
+        return first != previousFirst || words.count <= previous.count / 2
+    }
+}

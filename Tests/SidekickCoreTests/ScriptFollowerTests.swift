@@ -62,4 +62,16 @@ final class ScriptFollowerTests: XCTestCase {
         XCTAssertEqual(f.previousSentence(before: next + 2), next)
         XCTAssertEqual(f.previousSentence(before: next), 0)
     }
+
+    func testUtteranceRestartAfterPauseIsNew() {
+        XCTAssertTrue(Utterance.isNew(["next"], after: ["it", "listens", "while", "you", "talk"]))
+        XCTAssertTrue(Utterance.isNew(["it"], after: ["it", "listens", "while", "you", "talk"]))
+    }
+
+    func testUtteranceRevisionIsNotNew() {
+        XCTAssertFalse(Utterance.isNew(["go", "now"], after: ["uh", "go", "now"]))
+        XCTAssertFalse(Utterance.isNew(["go", "now"], after: ["um", "uh", "go", "now"]))
+        XCTAssertFalse(Utterance.isNew(["go", "now", "please"], after: ["go", "now", "please", "ok"]))
+        XCTAssertFalse(Utterance.isNew(["go", "now", "please", "ok"], after: ["go", "now"]))
+    }
 }
