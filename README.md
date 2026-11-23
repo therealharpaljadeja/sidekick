@@ -1,5 +1,8 @@
 # Sidekick
 
+[![CI](https://github.com/therealharpaljadeja/sidekick/actions/workflows/ci.yml/badge.svg)](https://github.com/therealharpaljadeja/sidekick/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/therealharpaljadeja/sidekick)](https://github.com/therealharpaljadeja/sidekick/releases/latest)
+
 A teleprompter that lives in your MacBook notch. Paste your script, hit **⌥⌘P**, and talk. Sidekick listens, highlights the next words you need to say, and rolls the script up line by line like movie credits, right under the camera. It hides itself from screen recordings, screenshots and screen sharing, so your viewers never see it.
 
 > [!WARNING]
@@ -13,7 +16,7 @@ A teleprompter that lives in your MacBook notch. Paste your script, hit **⌥⌘
 
 ## Install
 
-Download `Sidekick-<version>.dmg`, open it and drag **Sidekick** into **Applications**. Builds without an Apple Developer ID signature are blocked on first launch; allow it in **System Settings → Privacy & Security → Open Anyway**, or run:
+Download the latest `Sidekick-<version>.dmg` from [Releases](https://github.com/therealharpaljadeja/sidekick/releases/latest), open it and drag **Sidekick** into **Applications**. Builds without an Apple Developer ID signature are blocked on first launch; allow it in **System Settings → Privacy & Security → Open Anyway**, or run:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Sidekick.app
@@ -76,6 +79,10 @@ QuickTime, the screenshot toolbar, `screencapture`, OBS and Zoom/Meet/Teams use 
 Audio goes to Apple's Speech framework (on-device when supported, so nothing leaves your Mac). Each recognized word is matched against the next few script words with fuzzy matching, so filler words, small misrecognitions and dropped words don't derail it. Common words like "the" can't jump ahead on their own, and three matching words in a row can re-sync up to 40 words ahead if you skip a sentence. Pauses are fine: when macOS starts a new transcript after you stop talking, Sidekick picks up from where you left off.
 
 The matching logic lives in `Sources/SidekickCore` and is covered by `swift test`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for building, pull requests and how releases are cut, and [CHANGELOG.md](CHANGELOG.md) for what changed in each version. Report security issues privately as described in [SECURITY.md](SECURITY.md).
 
 ## Credits
 
