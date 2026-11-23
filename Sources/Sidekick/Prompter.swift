@@ -82,9 +82,10 @@ final class Prompter: ObservableObject {
     func loadChecklist(_ text: String) {
         let parsed = ChecklistParser.items(from: text)
         guard parsed != items else { return }
+        let kept = zip(items.prefix(itemCursor), parsed).prefix { $0 == $1 }.count
         items = parsed
         itemKeywords = parsed.map(TopicMatcher.keywords(for:))
-        itemCursor = min(itemCursor, items.count)
+        itemCursor = kept
         checkingItem = nil
         resetHeard()
         if mode == .checklist { speech.contextualStrings = checklistPhrases }
