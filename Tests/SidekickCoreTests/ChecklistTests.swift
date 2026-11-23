@@ -50,4 +50,9 @@ final class ChecklistTests: XCTestCase {
         XCTAssertFalse(TopicMatcher.covers(keywords: keywords, spoken: TopicMatcher.lemmas(in: "privacy")))
         XCTAssertTrue(TopicMatcher.covers(keywords: keywords, spoken: TopicMatcher.lemmas(in: "privacy and private browsing")))
     }
+
+    func testStrictIgnoresSharedPrefix() {
+        let keywords = TopicMatcher.keywords(for: "Discovery")
+        XCTAssertFalse(TopicMatcher.covers(keywords: keywords, spoken: TopicMatcher.lemmas(in: "discount"), strict: true))
+    }
 }
