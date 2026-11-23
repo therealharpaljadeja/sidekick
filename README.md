@@ -74,6 +74,8 @@ No word-for-word script? Put one talking point per line in the **Checklist** tab
 
 - On macOS 26 with Apple Intelligence on, Sidekick uses Apple's on-device model to tell when you've moved onto an item, even if you paraphrase. Nothing leaves your Mac.
 - Without Apple Intelligence it matches the item's key words (so "Hide the notch from screen recordings" ticks off when you say something like "I'm hiding the notch so the screen recording can't see it").
+- If Apple Intelligence isn't available, the Checklist tab says why and the notch shows **Key words only**.
+- To see why the model did or didn't tick an item, run `log stream --level debug --predicate 'subsystem == "com.harpaljadeja.sidekick"'` while presenting.
 - ⌥⌘→ ticks an item off by hand, ⌥⌘← brings the last one back.
 
 ## Hiding from recordings

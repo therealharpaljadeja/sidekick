@@ -4,6 +4,15 @@ All notable changes to Sidekick are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- Apple Intelligence now ticks off a checklist item when you introduce it, say you're done with it, or move on to the next one.
+
+### Added
+
+- Clear warning in the Checklist tab, and **Key words only** in the notch, when Apple Intelligence isn't available.
+- Debug logging of each Apple Intelligence decision.
+
 ## [0.2.1] - 2026-11-24
 
 ### Changed
