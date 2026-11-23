@@ -75,18 +75,20 @@ private final class AIJudge {
 
     private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Sidekick", category: "checklist")
 
+    private static let latestWords = 25
+
     private static let instructions = """
     You follow a presenter recording a video demo from an ordered checklist of talking points. \
-    You get the current checklist item, its neighbours, and a live speech-recognition transcript of what \
-    the presenter said since the current item came up. The transcript has no punctuation and may contain \
-    recognition mistakes. The presenter paraphrases and rarely uses the item's words, so judge the meaning. \
-    Pick the stage that describes where the presenter is at the very end of the transcript: \
-    stillOnPrevious if they're still on the previous item or haven't started the current one; \
-    onCurrent if they're introducing, talking about or doing the current item and haven't wrapped it up; \
-    finishedCurrent only if they clearly say they're done with it ("so that's…", "that's it for…", "moving on"); \
-    onNext only if they've actually started talking about or doing the item after it. \
-    Being on the current item, mentioning its words, or saying what's coming later does not finish it. \
-    When unsure, answer onCurrent.
+    You get the previous, current and next checklist items, and a live speech-recognition transcript of \
+    what the presenter said since the current item came up, split into "Earlier" and "Just now". \
+    The transcript has no punctuation and may contain recognition mistakes. The presenter paraphrases \
+    and rarely uses the items' words, so judge the meaning. \
+    Decide where the presenter is in "Just now": \
+    onNext if "Just now" is about the next item, or about any topic that isn't the current item \
+    after they've already talked about the current item "Earlier"; \
+    finishedCurrent if they wrap up the current item ("so that's…", "that's it for…", "moving on", "okay, next"); \
+    onCurrent if they're still introducing, explaining or doing the current item; \
+    stillOnPrevious if they haven't started the current item yet.
     """
 
     func prewarm() {
@@ -100,7 +102,10 @@ private final class AIJudge {
         if let previous { prompt += "Previous item (already done): \"\(previous)\"\n" }
         prompt += "Current item: \"\(item)\"\n"
         if let next { prompt += "Item after it: \"\(next)\"\n" }
-        prompt += "Transcript: \"\(transcript)\""
+        let words = transcript.split(separator: " ")
+        let earlier = words.dropLast(Self.latestWords).joined(separator: " ")
+        if !earlier.isEmpty { prompt += "Earlier: \"\(earlier)\"\n" }
+        prompt += "Just now: \"\(words.suffix(Self.latestWords).joined(separator: " "))\""
         do {
             let response = try await session.respond(
                 to: prompt, generating: TopicCheck.self, options: GenerationOptions(temperature: 0)

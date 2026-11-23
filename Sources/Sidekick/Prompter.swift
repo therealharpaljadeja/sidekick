@@ -257,6 +257,13 @@ final class Prompter: ObservableObject {
         if !ChecklistJudge.isReady, TopicMatcher.covers(keywords: itemKeywords[itemCursor], spoken: spoken, strict: false) {
             return checkOff()
         }
+        // Saying the next item's key words means you've moved on from this one.
+        if itemCursor + 1 < items.count {
+            let latest = TopicMatcher.lemmas(in: recent.suffix(30).joined(separator: " "))
+            if TopicMatcher.covers(keywords: itemKeywords[itemCursor + 1], spoken: latest, strict: ChecklistJudge.isReady) {
+                return checkOff()
+            }
+        }
         scheduleJudge()
     }
 
