@@ -82,8 +82,12 @@ final class Prompter: ObservableObject {
     func loadChecklist(_ text: String) {
         let parsed = ChecklistParser.items(from: text)
         guard parsed != items else { return }
-        let done = Set(items.prefix(itemCursor))
-        let kept = parsed.prefix { done.contains($0) }.count
+        var done = Dictionary(items.prefix(itemCursor).map { ($0, 1) }, uniquingKeysWith: +)
+        let kept = parsed.prefix { item in
+            guard let left = done[item], left > 0 else { return false }
+            done[item] = left - 1
+            return true
+        }.count
         items = parsed
         itemKeywords = parsed.map(TopicMatcher.keywords(for:))
         itemCursor = kept
