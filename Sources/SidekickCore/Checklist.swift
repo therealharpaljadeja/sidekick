@@ -60,6 +60,18 @@ public enum TopicMatcher {
         return heard >= 2 && Double(heard) >= Double(keywords.count) * 0.6
     }
 
+    /// Each distinct spoken word counts toward at most one key word, preferring exact matches.
+    static func heardCount(keywords: [String], spoken: [String]) -> Int {
+        var unused = Set(spoken)
+        var heard = 0
+        for word in keywords {
+            guard let match = unused.contains(word) ? word : unused.first(where: { isMatch(word, $0) }) else { continue }
+            unused.remove(match)
+            heard += 1
+        }
+        return heard
+    }
+
     static func isMatch(_ a: String, _ b: String) -> Bool {
         a == b || (a.count >= 5 && b.count >= 5 && a.prefix(5) == b.prefix(5))
     }

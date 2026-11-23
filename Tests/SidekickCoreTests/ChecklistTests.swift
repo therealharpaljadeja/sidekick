@@ -44,4 +44,10 @@ final class ChecklistTests: XCTestCase {
         let keywords = TopicMatcher.keywords(for: "Pricing")
         XCTAssertTrue(TopicMatcher.covers(keywords: keywords, spoken: TopicMatcher.lemmas(in: "pricing"), strict: true))
     }
+
+    func testOneSpokenWordCountsOnce() {
+        let keywords = TopicMatcher.keywords(for: "Privacy and private browsing")
+        XCTAssertFalse(TopicMatcher.covers(keywords: keywords, spoken: TopicMatcher.lemmas(in: "privacy")))
+        XCTAssertTrue(TopicMatcher.covers(keywords: keywords, spoken: TopicMatcher.lemmas(in: "privacy and private browsing")))
+    }
 }
