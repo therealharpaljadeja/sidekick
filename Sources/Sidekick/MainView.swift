@@ -167,10 +167,27 @@ private struct ChecklistPane: View {
             .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Theme.surface))
             .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.hairline, lineWidth: 1))
 
-            Text(understanding)
-                .font(Theme.intern(12))
-                .foregroundColor(Theme.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            switch ChecklistJudge.status {
+            case .ready:
+                Text("Understands paraphrasing with Apple Intelligence, on this Mac. ⌥⌘→ ticks an item off by hand.")
+                    .font(Theme.intern(12))
+                    .foregroundColor(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            case .unavailable(let reason):
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Apple Intelligence isn't available")
+                        .font(Theme.intern(12, .medium))
+                        .foregroundColor(Theme.text)
+                    Text(reason + " Say the item's key words, or press ⌥⌘→ to tick it off by hand.")
+                        .font(Theme.intern(12))
+                        .foregroundColor(Theme.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.text.opacity(0.5), lineWidth: 1))
+            }
 
             if let message = prompter.message {
                 Text(message)
@@ -187,13 +204,6 @@ private struct ChecklistPane: View {
         .padding(28)
         .onChange(of: checklist) { newValue in
             if prompter.isPresenting, prompter.mode == .checklist { prompter.loadChecklist(newValue) }
-        }
-    }
-
-    private var understanding: String {
-        switch ChecklistJudge.status {
-        case .ready: return "Understands paraphrasing with Apple Intelligence, on this Mac. ⌥⌘→ ticks an item off by hand."
-        case .unavailable(let reason): return reason + " ⌥⌘→ ticks an item off by hand."
         }
     }
 

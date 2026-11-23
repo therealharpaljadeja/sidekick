@@ -41,6 +41,13 @@ struct NotchView: View {
                 StatusLabel()
                 Spacer(minLength: geometry.hasNotch ? geometry.notchSize.width + 16 : 16)
                 HStack(spacing: 12) {
+                    if prompter.mode == .checklist, !ChecklistJudge.isReady {
+                        Text("Key words only")
+                            .font(Theme.intern(11, .medium))
+                            .foregroundColor(Theme.secondary)
+                            .lineLimit(1)
+                            .help("Apple Intelligence isn't available, so items tick off only when you say their key words.")
+                    }
                     PrivacyLight()
                     Text(prompter.progressLabel)
                         .font(Theme.intern(11, .medium))
