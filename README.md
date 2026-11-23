@@ -5,6 +5,12 @@ A teleprompter that lives in your MacBook notch. Paste your script, hit **⌥⌘
 > [!WARNING]
 > Sidekick is vibe coded: it was built quickly with AI and has not been reviewed or tested the way production software is. Use it at your own risk.
 
+## Demo
+
+[![Sidekick following a narrated script in the notch, then hiding from the recording](docs/demo-preview.gif)](docs/demo.mp4)
+
+[Watch the full 1-minute demo with sound](docs/demo.mp4): Sidekick follows the narration, hides from the recording mid-script and comes back. Recorded with a ScreenCaptureKit recorder and a synthesized voice.
+
 ## Install
 
 Download `Sidekick-<version>.dmg`, open it and drag **Sidekick** into **Applications**. Builds without an Apple Developer ID signature are blocked on first launch; allow it in **System Settings → Privacy & Security → Open Anyway**, or run:
