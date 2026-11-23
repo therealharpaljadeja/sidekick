@@ -277,9 +277,12 @@ final class Prompter: ObservableObject {
         judging = true
         judgedWordCount = wordsForItem.count
         lastJudged = Date()
+        let previous = index > 0 ? items[index - 1] : nil
         let next = index + 1 < items.count ? items[index + 1] : nil
         Task {
-            let covered = await ChecklistJudge.covers(item: items[index], next: next, transcript: words.joined(separator: " "))
+            let covered = await ChecklistJudge.covers(
+                item: items[index], previous: previous, next: next, transcript: words.joined(separator: " ")
+            )
             judging = false
             if covered == true, index == itemCursor, checkingItem == nil {
                 checkOff()
