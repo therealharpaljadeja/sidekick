@@ -87,3 +87,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for building, pull requests and how relea
 ## Credits
 
 Type is [Intern](https://github.com/bvvst/intern), a rounded Inter by bvvst, under the SIL Open Font License (`Resources/Fonts/OFL.txt`).
+
+## License
+
+[MIT](LICENSE). The bundled Intern font is under its own [SIL Open Font License](Resources/Fonts/OFL.txt).
