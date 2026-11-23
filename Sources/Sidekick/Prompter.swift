@@ -183,6 +183,12 @@ final class Prompter: ObservableObject {
         }
     }
 
+    /// Ticks off every checklist item before `index`, leaving the rest open.
+    func checkItems(before index: Int) {
+        guard mode == .checklist else { return }
+        moveItem(to: index)
+    }
+
     func nextSentence() {
         switch mode {
         case .script: jump(to: follower.nextSentence(after: cursor))
