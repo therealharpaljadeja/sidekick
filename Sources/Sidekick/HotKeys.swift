@@ -71,8 +71,8 @@ enum HotKeys {
     static let shortcuts: [Shortcut] = [
         Shortcut(keys: "⌥⌘P", action: "Start · pause · resume"),
         Shortcut(keys: "⌥⌘R", action: "Restart from the top"),
-        Shortcut(keys: "⌥⌘←", action: "Back one sentence"),
-        Shortcut(keys: "⌥⌘→", action: "Skip to next sentence"),
+        Shortcut(keys: "⌥⌘←", action: "Back one sentence · item"),
+        Shortcut(keys: "⌥⌘→", action: "Next sentence · check off item"),
         Shortcut(keys: "⌥⌘.", action: "Stop and hide"),
     ]
 

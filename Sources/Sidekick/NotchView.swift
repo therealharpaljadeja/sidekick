@@ -42,7 +42,7 @@ struct NotchView: View {
                 Spacer(minLength: geometry.hasNotch ? geometry.notchSize.width + 16 : 16)
                 HStack(spacing: 12) {
                     PrivacyLight()
-                    Text(progressLabel)
+                    Text(prompter.progressLabel)
                         .font(Theme.intern(11, .medium))
                         .monospacedDigit()
                         .foregroundColor(Theme.secondary)
@@ -51,13 +51,27 @@ struct NotchView: View {
             .padding(.horizontal, 26)
             .frame(height: geometry.notchSize.height)
 
-            PromptText(
-                tokens: prompter.tokens,
-                cursor: prompter.cursor,
-                fontSize: fontSize,
-                lines: lineCount,
-                width: size.width - 52
-            )
+            Group {
+                switch prompter.mode {
+                case .script:
+                    PromptText(
+                        tokens: prompter.tokens,
+                        cursor: prompter.cursor,
+                        fontSize: fontSize,
+                        lines: lineCount,
+                        width: size.width - 52
+                    )
+                case .checklist:
+                    ChecklistRoll(
+                        items: prompter.items,
+                        cursor: prompter.itemCursor,
+                        checking: prompter.checkingItem,
+                        fontSize: fontSize,
+                        lines: lineCount,
+                        width: size.width - 52
+                    )
+                }
+            }
             .padding(.horizontal, 26)
             .padding(.top, NotchLayout.textTopPadding)
 
@@ -71,9 +85,6 @@ struct NotchView: View {
         )
     }
 
-    private var progressLabel: String {
-        "\(Int((prompter.progress * 100).rounded()))%"
-    }
 }
 
 private struct StatusLabel: View {
@@ -184,18 +195,93 @@ private struct PromptText: View {
         (cursor..<cursor + Self.highlightedWords).contains(index) ? .white : Color(white: 0.46)
     }
 
-    /// Solid over the full lines, then fading through the line that peeks in below.
-    private var fade: some View {
-        let full = CGFloat(max(lines, 1))
-        return LinearGradient(
-            stops: [
-                .init(color: .black, location: 0),
-                .init(color: .black, location: (full - 0.15) / (full + NotchLayout.peekLines)),
-                .init(color: .clear, location: 1),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+    private var fade: some View { creditsFade(lines: lines) }
+
+    private func message(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.intern(fontSize, .medium))
+            .foregroundColor(Theme.secondary)
+            .frame(width: width, height: height, alignment: .topLeading)
+    }
+}
+
+/// Solid over the full lines, then fading through the line that peeks in below.
+private func creditsFade(lines: Int) -> some View {
+    let full = CGFloat(max(lines, 1))
+    return LinearGradient(
+        stops: [
+            .init(color: .black, location: 0),
+            .init(color: .black, location: (full - 0.15) / (full + NotchLayout.peekLines)),
+            .init(color: .clear, location: 1),
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+}
+
+/// The next items to cover, one per line. A covered item ticks, then rolls up and away.
+private struct ChecklistRoll: View {
+    let items: [String]
+    let cursor: Int
+    let checking: Int?
+    let fontSize: Double
+    let lines: Int
+    let width: CGFloat
+
+    private var lineHeight: CGFloat { CGFloat(fontSize) * NotchLayout.lineHeightMultiple }
+    private var height: CGFloat { lineHeight * (CGFloat(max(lines, 1)) + NotchLayout.peekLines) }
+
+    var body: some View {
+        if items.isEmpty {
+            message("Add a checklist in Sidekick to begin.")
+        } else if cursor >= items.count {
+            message("Everything's covered. That's a wrap.")
+        } else {
+            roll
+        }
+    }
+
+    private var roll: some View {
+        let visible = max(0, cursor - 1)...min(items.count - 1, cursor + max(lines, 1))
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(visible), id: \.self) { index in
+                row(index)
+                    .frame(width: width, height: lineHeight, alignment: .leading)
+                    .offset(y: CGFloat(index - cursor) * lineHeight)
+                    .opacity(index < cursor ? 0 : 1)
+            }
+        }
+        .frame(width: width, height: height, alignment: .topLeading)
+        .clipped()
+        .animation(.spring(response: 0.5, dampingFraction: 1), value: cursor)
+        .animation(.easeOut(duration: 0.2), value: checking)
+        .drawingGroup()
+        .mask(creditsFade(lines: lines))
+    }
+
+    private func row(_ index: Int) -> some View {
+        let done = index < cursor || index == checking
+        let box = CGFloat(fontSize) * 0.62
+        return HStack(spacing: CGFloat(fontSize) * 0.55) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 2)
+                    .stroke(index == cursor ? Theme.text : Theme.tertiary, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Theme.text)
+                    .opacity(done ? 1 : 0)
+                Image(systemName: "checkmark")
+                    .font(.system(size: box * 0.62, weight: .bold))
+                    .foregroundColor(.black)
+                    .opacity(done ? 1 : 0)
+            }
+            .frame(width: box, height: box)
+            Text(items[index])
+                .font(Theme.intern(fontSize, .medium))
+                .foregroundColor(index == cursor && !done ? .white : Color(white: 0.46))
+                .strikethrough(done, color: Color(white: 0.46))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
     }
 
     private func message(_ text: String) -> some View {

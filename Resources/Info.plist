@@ -27,8 +27,8 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Sidekick listens to you so it can follow along with your script.</string>
+	<string>Sidekick listens to you so it can follow along with your script or checklist.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Sidekick matches what you say to your script to show the next words.</string>
+	<string>Sidekick matches what you say to your script or checklist to show what's next.</string>
 </dict>
 </plist>

@@ -4,6 +4,8 @@ import Speech
 
 enum Prefs {
     static let script = "script"
+    static let checklist = "checklist"
+    static let mode = "mode"
     static let hideFromCapture = "hideFromCapture"
     static let fontSize = "fontSize"
     static let lineCount = "lineCount"
@@ -16,6 +18,7 @@ enum Prefs {
     static func register() {
         UserDefaults.standard.register(defaults: [
             hideFromCapture: true,
+            mode: PromptMode.script.rawValue,
             fontSize: 18.0,
             lineCount: 2,
             panelWidth: 620.0,
@@ -38,6 +41,11 @@ enum Prefs {
     }
 
     static var defaults: UserDefaults { .standard }
+}
+
+enum PromptMode: String {
+    case script
+    case checklist
 }
 
 enum FontLoader {
