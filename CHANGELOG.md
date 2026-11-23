@@ -6,6 +6,7 @@ All notable changes to Sidekick are listed here. The format follows [Keep a Chan
 
 ### Changed
 
+- The Checklist tab is now a real checklist: one row per item with a checkbox, Return to add an item, and paste a list to split it into rows. While presenting, rows tick off live, and clicking a checkbox ticks or unticks it. "Edit as text" brings back the plain editor.
 - Apple Intelligence now ticks off a checklist item when you introduce it, say you're done with it, or move on to the next one.
 
 ### Added

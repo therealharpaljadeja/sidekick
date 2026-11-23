@@ -143,27 +143,26 @@ private struct ScriptPane: View {
 private struct ChecklistPane: View {
     @EnvironmentObject private var prompter: Prompter
     @AppStorage(Prefs.checklist) private var checklist = ""
+    @State private var rows: [ChecklistRow] = []
+    @State private var editingAsText = false
+    @State private var hovered: UUID?
+    @FocusState private var focused: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            ZStack(alignment: .topLeading) {
-                TextEditor(text: $checklist)
-                    .font(Theme.intern(15))
-                    .lineSpacing(5)
-                    .foregroundColor(Theme.text)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
-                if checklist.isEmpty {
-                    Text("One item per line, in the order you'll cover them.\nSay it your own way: Sidekick ticks an item off once you've talked about it and moves to the next.")
-                        .font(Theme.intern(15))
-                        .lineSpacing(5)
-                        .foregroundColor(Theme.tertiary)
-                        .padding(.horizontal, 17)
-                        .padding(.vertical, 12)
-                        .allowsHitTesting(false)
-                }
+            HStack {
+                Text(editingAsText ? "One item per line" : "Talking points, in order")
+                    .font(Theme.intern(12, .medium))
+                    .foregroundColor(Theme.secondary)
+                Spacer()
+                Button(editingAsText ? "Edit as list" : "Edit as text") { editingAsText.toggle() }
+                    .buttonStyle(GhostButtonStyle())
             }
+
+            Group {
+                if editingAsText { textEditor } else { list }
+            }
+            .frame(maxHeight: .infinity)
             .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Theme.surface))
             .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.hairline, lineWidth: 1))
 
@@ -202,9 +201,173 @@ private struct ChecklistPane: View {
             PresentControls(mode: .checklist, stats: stats, isEmpty: ChecklistParser.items(from: checklist).isEmpty)
         }
         .padding(28)
+        .onAppear(perform: syncRows)
         .onChange(of: checklist) { newValue in
+            syncRows()
             if prompter.isPresenting, prompter.mode == .checklist { prompter.loadChecklist(newValue) }
         }
+        .onChange(of: rows) { _ in rowsChanged() }
+    }
+
+    private var textEditor: some View {
+        ZStack(alignment: .topLeading) {
+            TextEditor(text: $checklist)
+                .font(Theme.intern(15))
+                .lineSpacing(5)
+                .foregroundColor(Theme.text)
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+            if checklist.isEmpty {
+                Text("Paste your list here, one item per line. Bullets and numbers are fine.")
+                    .font(Theme.intern(15))
+                    .lineSpacing(5)
+                    .foregroundColor(Theme.tertiary)
+                    .padding(.horizontal, 17)
+                    .padding(.vertical, 12)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private var list: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                rowStack
+            }
+            .onChange(of: focused) { id in
+                if let id { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id) } }
+            }
+        }
+    }
+
+    private var rowStack: some View {
+        VStack(spacing: 0) {
+            ForEach($rows) { $row in
+                rowView($row).id(row.id)
+                Rectangle().fill(Theme.hairline).frame(height: 1)
+            }
+            Button(action: { addRow(after: rows.last?.id) }) {
+                HStack(spacing: 12) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .medium))
+                        .frame(width: 16, height: 16)
+                    Text("Add item").font(Theme.intern(14))
+                    Spacer()
+                }
+                .foregroundColor(Theme.tertiary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func rowView(_ row: Binding<ChecklistRow>) -> some View {
+        let id = row.wrappedValue.id
+        let item = itemIndex(of: id)
+        let live = prompter.isPresenting && prompter.mode == .checklist
+        let done = live && item.map { $0 < prompter.itemCursor || $0 == prompter.checkingItem } == true
+        let current = live && item == prompter.itemCursor && prompter.checkingItem == nil
+
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Button {
+                if let item { prompter.checkItems(before: done ? item : item + 1) }
+            } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(done ? Theme.text : .clear)
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(done ? Theme.text : current ? Theme.secondary : Theme.tertiary, lineWidth: 1)
+                    if done {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(Theme.canvas)
+                    }
+                }
+                .frame(width: 16, height: 16)
+                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 }
+            }
+            .buttonStyle(.plain)
+            .disabled(!live || item == nil)
+            .help(live ? (done ? "Untick" : "Tick off") : "Ticks off as you talk")
+
+            TextField("Talking point", text: row.text, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(Theme.intern(15))
+                .foregroundColor(done ? Theme.tertiary : Theme.text)
+                .strikethrough(done, color: Theme.tertiary)
+                .focused($focused, equals: id)
+                .onSubmit { addRow(after: id) }
+
+            if current {
+                Text("NOW")
+                    .font(Theme.mono(10))
+                    .foregroundColor(Theme.secondary)
+            }
+            Button { remove(id) } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(Theme.tertiary)
+                    .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .opacity(hovered == id ? 1 : 0)
+            .help("Remove")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(current ? Theme.raised : .clear)
+        .contentShape(Rectangle())
+        .onHover { hovered = $0 ? id : (hovered == id ? nil : hovered) }
+    }
+
+    /// The row's position among non-empty rows, which is its index in the notch.
+    private func itemIndex(of id: UUID) -> Int? {
+        guard let row = rows.firstIndex(where: { $0.id == id }), !rows[row].isBlank else { return nil }
+        return rows[..<row].filter { !$0.isBlank }.count
+    }
+
+    private var serialized: String {
+        rows.filter { !$0.isBlank }.map { $0.text.trimmingCharacters(in: .whitespaces) }.joined(separator: "\n")
+    }
+
+    private func syncRows() {
+        guard ChecklistParser.items(from: checklist) != ChecklistParser.items(from: serialized) || rows.isEmpty else { return }
+        rows = ChecklistParser.items(from: checklist).map { ChecklistRow(text: $0) }
+        if rows.isEmpty { rows = [ChecklistRow(text: "")] }
+    }
+
+    private func rowsChanged() {
+        // A pasted list arrives as one row with line breaks; split it into rows.
+        if let index = rows.firstIndex(where: { $0.text.contains("\n") }) {
+            let pieces = ChecklistParser.items(from: rows[index].text).map { ChecklistRow(text: $0) }
+            rows.replaceSubrange(index...index, with: pieces.isEmpty ? [ChecklistRow(text: "")] : pieces)
+            focused = rows[min(index + max(pieces.count, 1), rows.count) - 1].id
+            return
+        }
+        if serialized != checklist { checklist = serialized }
+    }
+
+    private func addRow(after id: UUID?) {
+        if let id, let index = rows.firstIndex(where: { $0.id == id }) {
+            if rows[index].isBlank { return }
+            if index + 1 < rows.count, rows[index + 1].isBlank { focused = rows[index + 1].id; return }
+            let row = ChecklistRow(text: "")
+            rows.insert(row, at: index + 1)
+            focused = row.id
+        } else {
+            let row = ChecklistRow(text: "")
+            rows.append(row)
+            focused = row.id
+        }
+    }
+
+    private func remove(_ id: UUID) {
+        rows.removeAll { $0.id == id }
+        if rows.isEmpty { rows = [ChecklistRow(text: "")] }
     }
 
     private var stats: String {
@@ -214,6 +377,12 @@ private struct ChecklistPane: View {
         }
         return count == 1 ? "1 item" : "\(count) items"
     }
+}
+
+private struct ChecklistRow: Identifiable, Equatable {
+    let id = UUID()
+    var text: String
+    var isBlank: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 }
 
 /// Stats on the left; Start, or Stop · Restart · Pause while this mode is in the notch.
