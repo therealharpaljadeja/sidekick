@@ -39,4 +39,9 @@ final class ChecklistTests: XCTestCase {
         XCTAssertFalse(TopicMatcher.covers(keywords: keywords, spoken: TopicMatcher.lemmas(in: "hide it from the screen"), strict: true))
         XCTAssertTrue(TopicMatcher.covers(keywords: keywords, spoken: TopicMatcher.lemmas(in: "hide it from screen recordings"), strict: true))
     }
+
+    func testStrictShortItemMatchesExactWord() {
+        let keywords = TopicMatcher.keywords(for: "Pricing")
+        XCTAssertTrue(TopicMatcher.covers(keywords: keywords, spoken: TopicMatcher.lemmas(in: "pricing"), strict: true))
+    }
 }

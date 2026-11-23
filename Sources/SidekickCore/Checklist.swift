@@ -54,8 +54,8 @@ public enum TopicMatcher {
     /// With `strict`, every key word must be heard; otherwise most of them.
     public static func covers(keywords: [String], spoken: [String], strict: Bool = false) -> Bool {
         guard !keywords.isEmpty else { return false }
-        let heard = keywords.filter { word in spoken.contains { isMatch(word, $0) } }.count
-        if strict { return heard == keywords.count && keywords.count >= 2 }
+        let heard = heardCount(keywords: keywords, spoken: spoken)
+        if strict { return heard == keywords.count }
         if keywords.count <= 2 { return heard == keywords.count }
         return heard >= 2 && Double(heard) >= Double(keywords.count) * 0.6
     }
