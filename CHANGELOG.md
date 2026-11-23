@@ -4,6 +4,10 @@ All notable changes to Sidekick are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- New app icon.
+
 ## [0.2.0] - 2026-11-23
 
 ### Added
