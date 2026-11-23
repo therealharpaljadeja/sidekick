@@ -4,6 +4,8 @@ All notable changes to Sidekick are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-24
+
 ### Changed
 
 - New app icon.
@@ -31,6 +33,7 @@ First public release.
 - Dock icon that reopens the main window.
 - Universal (Apple Silicon + Intel) DMG.
 
-[Unreleased]: https://github.com/therealharpaljadeja/sidekick/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/therealharpaljadeja/sidekick/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/therealharpaljadeja/sidekick/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/therealharpaljadeja/sidekick/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/therealharpaljadeja/sidekick/releases/tag/v0.1.0
