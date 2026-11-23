@@ -57,7 +57,7 @@ jobs:
           DMG="build/Sidekick-$VERSION.dmg"
           (cd build && shasum -a 256 "Sidekick-$VERSION.dmg" > "Sidekick-$VERSION.dmg.sha256")
           awk -v v="[$VERSION]" '/^## \[/ { p = index($0, v) > 0; next } /^\[.*\]: / { next } p' CHANGELOG.md > notes.md
-          if [[ -z "${SIGN_IDENTITY:-}" ]]; then
-            printf '\n---\nThis build is not signed with an Apple Developer ID. On first launch, allow it in **System Settings → Privacy & Security → Open Anyway**, or run `xattr -dr com.apple.quarantine /Applications/Sidekick.app`.\n' >> notes.md
+          if [[ -z "${SIGN_IDENTITY:-}" || -z "$APPLE_ID" || -z "$APPLE_TEAM_ID" || -z "$APPLE_APP_PASSWORD" ]]; then
+            printf '\n---\nThis build is not notarized by Apple. On first launch, allow it in **System Settings → Privacy & Security → Open Anyway**, or run `xattr -dr com.apple.quarantine /Applications/Sidekick.app`.\n' >> notes.md
           fi
           gh release create "$GITHUB_REF_NAME" "$DMG" "$DMG.sha256" --title "Sidekick $VERSION" --notes-file notes.md --verify-tag
