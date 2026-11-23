@@ -253,7 +253,8 @@ final class Prompter: ObservableObject {
         guard checkingItem == nil, itemCursor < items.count else { return }
         let recent = recentWords
         let spoken = TopicMatcher.lemmas(in: recent.joined(separator: " "))
-        if TopicMatcher.covers(keywords: itemKeywords[itemCursor], spoken: spoken, strict: ChecklistJudge.isReady) {
+        // With Apple Intelligence, key words only show you've started an item, so the model decides when it's done.
+        if !ChecklistJudge.isReady, TopicMatcher.covers(keywords: itemKeywords[itemCursor], spoken: spoken, strict: false) {
             return checkOff()
         }
         scheduleJudge()

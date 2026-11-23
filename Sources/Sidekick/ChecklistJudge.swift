@@ -38,7 +38,7 @@ enum ChecklistJudge {
         #endif
     }
 
-    /// `nil` when the model can't answer, so the caller can rely on key words instead.
+    /// True once you've finished the item or moved on to the next one. `nil` when the model can't answer, so the caller can rely on key words instead.
     static func covers(item: String, previous: String?, next: String?, transcript: String) async -> Bool? {
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *), isReady {
@@ -52,11 +52,20 @@ enum ChecklistJudge {
 #if canImport(FoundationModels)
 @available(macOS 26.0, *)
 @Generable
+private enum Stage {
+    case stillOnPrevious
+    case onCurrent
+    case finishedCurrent
+    case onNext
+}
+
+@available(macOS 26.0, *)
+@Generable
 private struct TopicCheck {
-    @Guide(description: "A few words on what the presenter is talking about or doing right now.")
+    @Guide(description: "A few words on what the presenter is talking about or doing at the very end of the transcript.")
     var nowTalkingAbout: String
-    @Guide(description: "True if the presenter is on the current item, has said they're done with it, or has moved on to the item after it.")
-    var covered: Bool
+    @Guide(description: "Where the presenter is at the very end of the transcript.")
+    var stage: Stage
 }
 
 @available(macOS 26.0, *)
@@ -71,12 +80,13 @@ private final class AIJudge {
     You get the current checklist item, its neighbours, and a live speech-recognition transcript of what \
     the presenter said since the current item came up. The transcript has no punctuation and may contain \
     recognition mistakes. The presenter paraphrases and rarely uses the item's words, so judge the meaning. \
-    Answer covered = true if any of these hold: \
-    they are talking about or doing the current item, even briefly or in their own words; \
-    they introduce it ("now let me show you…", "next up…"); \
-    they say they're done with it ("so that's…", "that's it for…", "moving on"); \
-    or they have moved on to the item after it. \
-    Answer false only if they are still on the previous item or saying something unrelated to the current item.
+    Pick the stage that describes where the presenter is at the very end of the transcript: \
+    stillOnPrevious if they're still on the previous item or haven't started the current one; \
+    onCurrent if they're introducing, talking about or doing the current item and haven't wrapped it up; \
+    finishedCurrent only if they clearly say they're done with it ("so that's…", "that's it for…", "moving on"); \
+    onNext only if they've actually started talking about or doing the item after it. \
+    Being on the current item, mentioning its words, or saying what's coming later does not finish it. \
+    When unsure, answer onCurrent.
     """
 
     func prewarm() {
@@ -96,8 +106,8 @@ private final class AIJudge {
                 to: prompt, generating: TopicCheck.self, options: GenerationOptions(temperature: 0)
             )
             let check = response.content
-            Self.log.debug("\(check.covered ? "covered" : "not yet", privacy: .public) · \(item, privacy: .public) · heard “\(transcript, privacy: .public)” · model: \(check.nowTalkingAbout, privacy: .public)")
-            return check.covered
+            Self.log.debug("\(String(describing: check.stage), privacy: .public) · \(item, privacy: .public) · heard “\(transcript, privacy: .public)” · model: \(check.nowTalkingAbout, privacy: .public)")
+            return check.stage == .finishedCurrent || check.stage == .onNext
         } catch {
             Self.log.error("Apple Intelligence failed: \(error.localizedDescription, privacy: .public)")
             return nil

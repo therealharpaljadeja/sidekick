@@ -6,7 +6,7 @@ All notable changes to Sidekick are listed here. The format follows [Keep a Chan
 
 ### Changed
 
-- Apple Intelligence now ticks off a checklist item when you introduce it, say you're done with it, or move on to the next one.
+- With Apple Intelligence on, a checklist item ticks off only once you say you're done with it or start the next one, not as soon as you start talking about it.
 
 ### Added
 
