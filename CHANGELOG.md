@@ -4,6 +4,15 @@ All notable changes to Sidekick are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-23
+
+### Added
+
+- **Checklist mode**: type one talking point per line and the notch shows the current item and the next ones. Sidekick ticks an item off when it hears you cover it, even in your own words.
+  - With Apple Intelligence on (macOS 26, supported Mac), the on-device model judges whether you've covered an item. Otherwise Sidekick matches the item's key words, allowing other word forms.
+  - ⌥⌘→ ticks off the current item by hand, and ⌥⌘← brings the last one back.
+- ⌥⌘P starts whichever tab is open, Script or Checklist.
+
 ## [0.1.0] - 2026-11-22
 
 First public release.
@@ -18,5 +27,6 @@ First public release.
 - Dock icon that reopens the main window.
 - Universal (Apple Silicon + Intel) DMG.
 
-[Unreleased]: https://github.com/therealharpaljadeja/sidekick/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/therealharpaljadeja/sidekick/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/therealharpaljadeja/sidekick/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/therealharpaljadeja/sidekick/releases/tag/v0.1.0

@@ -1,14 +1,17 @@
 import Carbon.HIToolbox
 import Speech
+import SidekickCore
 import SwiftUI
 
 struct MainView: View {
     enum Tab: String, CaseIterable {
         case script = "Script"
+        case checklist = "Checklist"
         case settings = "Settings"
     }
 
-    @State private var tab: Tab = .script
+    @EnvironmentObject private var prompter: Prompter
+    @State private var tab: Tab = Prefs.defaults.string(forKey: Prefs.mode) == PromptMode.checklist.rawValue ? .checklist : .script
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -17,6 +20,7 @@ struct MainView: View {
             Group {
                 switch tab {
                 case .script: ScriptPane()
+                case .checklist: ChecklistPane()
                 case .settings: SettingsPane()
                 }
             }
@@ -43,7 +47,7 @@ struct MainView: View {
             Spacer()
             HStack(spacing: 18) {
                 ForEach(Tab.allCases, id: \.self) { item in
-                    Button(item.rawValue) { tab = item }
+                    Button(item.rawValue) { select(item) }
                         .buttonStyle(TabButtonStyle(isActive: tab == item))
                 }
             }
@@ -51,6 +55,13 @@ struct MainView: View {
         .padding(.horizontal, 28)
         .padding(.top, 36)
         .padding(.bottom, 16)
+    }
+
+    /// ⌥⌘P starts whichever of Script or Checklist you last had open.
+    private func select(_ item: Tab) {
+        tab = item
+        let mode: PromptMode? = item == .script ? .script : item == .checklist ? .checklist : nil
+        if let mode { Prefs.defaults.set(mode.rawValue, forKey: Prefs.mode) }
     }
 }
 
@@ -108,36 +119,11 @@ private struct ScriptPane: View {
                     .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Theme.raised))
             }
 
-            HStack(spacing: 10) {
-                Text(stats)
-                    .font(Theme.mono(11))
-                    .foregroundColor(Theme.tertiary)
-                Spacer()
-                if prompter.isPresenting {
-                    Button("Stop") { prompter.stop() }
-                        .buttonStyle(GhostButtonStyle())
-                        .padding(.trailing, 6)
-                    Button("Restart") { prompter.restart() }
-                        .buttonStyle(SecondaryButtonStyle())
-                    Button(prompter.isListening ? "Pause" : "Resume") { prompter.primaryAction() }
-                        .buttonStyle(PrimaryButtonStyle())
-                } else {
-                    Button {
-                        prompter.present()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Text("Start in notch")
-                            Text("⌥⌘P").font(Theme.mono(11)).opacity(0.5)
-                        }
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .disabled(script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
+            PresentControls(mode: .script, stats: stats, isEmpty: script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(28)
         .onChange(of: script) { newValue in
-            if prompter.isPresenting { prompter.load(newValue) }
+            if prompter.isPresenting, prompter.mode == .script { prompter.load(newValue) }
         }
     }
 
@@ -145,10 +131,115 @@ private struct ScriptPane: View {
         let words = script.split(whereSeparator: \.isWhitespace).count
         guard words > 0 else { return "0 words" }
         let minutes = max(1, Int((Double(words) / 150).rounded()))
-        if prompter.isPresenting {
+        if prompter.isPresenting, prompter.mode == .script {
             return "\(words) words · \(Int((prompter.progress * 100).rounded()))% read"
         }
         return "\(words) words · ~\(minutes) min"
+    }
+}
+
+// MARK: Checklist
+
+private struct ChecklistPane: View {
+    @EnvironmentObject private var prompter: Prompter
+    @AppStorage(Prefs.checklist) private var checklist = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $checklist)
+                    .font(Theme.intern(15))
+                    .lineSpacing(5)
+                    .foregroundColor(Theme.text)
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
+                if checklist.isEmpty {
+                    Text("One item per line, in the order you'll cover them.\nSay it your own way: Sidekick ticks an item off once you've talked about it and moves to the next.")
+                        .font(Theme.intern(15))
+                        .lineSpacing(5)
+                        .foregroundColor(Theme.tertiary)
+                        .padding(.horizontal, 17)
+                        .padding(.vertical, 12)
+                        .allowsHitTesting(false)
+                }
+            }
+            .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Theme.surface))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.hairline, lineWidth: 1))
+
+            Text(understanding)
+                .font(Theme.intern(12))
+                .foregroundColor(Theme.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let message = prompter.message {
+                Text(message)
+                    .font(Theme.intern(12))
+                    .foregroundColor(Theme.text)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Theme.raised))
+            }
+
+            PresentControls(mode: .checklist, stats: stats, isEmpty: ChecklistParser.items(from: checklist).isEmpty)
+        }
+        .padding(28)
+        .onChange(of: checklist) { newValue in
+            if prompter.isPresenting, prompter.mode == .checklist { prompter.loadChecklist(newValue) }
+        }
+    }
+
+    private var understanding: String {
+        switch ChecklistJudge.status {
+        case .ready: return "Understands paraphrasing with Apple Intelligence, on this Mac. ⌥⌘→ ticks an item off by hand."
+        case .unavailable(let reason): return reason + " ⌥⌘→ ticks an item off by hand."
+        }
+    }
+
+    private var stats: String {
+        let count = ChecklistParser.items(from: checklist).count
+        if prompter.isPresenting, prompter.mode == .checklist {
+            return "\(prompter.progressLabel) covered"
+        }
+        return count == 1 ? "1 item" : "\(count) items"
+    }
+}
+
+/// Stats on the left; Start, or Stop · Restart · Pause while this mode is in the notch.
+private struct PresentControls: View {
+    @EnvironmentObject private var prompter: Prompter
+    let mode: PromptMode
+    let stats: String
+    let isEmpty: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(stats)
+                .font(Theme.mono(11))
+                .foregroundColor(Theme.tertiary)
+            Spacer()
+            if prompter.isPresenting, prompter.mode == mode {
+                Button("Stop") { prompter.stop() }
+                    .buttonStyle(GhostButtonStyle())
+                    .padding(.trailing, 6)
+                Button("Restart") { prompter.restart() }
+                    .buttonStyle(SecondaryButtonStyle())
+                Button(prompter.isListening ? "Pause" : "Resume") { prompter.primaryAction() }
+                    .buttonStyle(PrimaryButtonStyle())
+            } else {
+                Button {
+                    prompter.present(mode)
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("Start in notch")
+                        Text("⌥⌘P").font(Theme.mono(11)).opacity(0.5)
+                    }
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(isEmpty)
+            }
+        }
     }
 }
 
