@@ -61,7 +61,7 @@ struct MainView: View {
     private func select(_ item: Tab) {
         tab = item
         let mode: PromptMode? = item == .script ? .script : item == .checklist ? .checklist : nil
-        if let mode, !prompter.isPresenting { Prefs.defaults.set(mode.rawValue, forKey: Prefs.mode) }
+        if let mode { Prefs.defaults.set(mode.rawValue, forKey: Prefs.mode) }
     }
 }
 
