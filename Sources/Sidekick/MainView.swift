@@ -10,7 +10,8 @@ struct MainView: View {
         case settings = "Settings"
     }
 
-    @State private var tab: Tab = .script
+    @EnvironmentObject private var prompter: Prompter
+    @State private var tab: Tab = Prefs.defaults.string(forKey: Prefs.mode) == PromptMode.checklist.rawValue ? .checklist : .script
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -46,7 +47,7 @@ struct MainView: View {
             Spacer()
             HStack(spacing: 18) {
                 ForEach(Tab.allCases, id: \.self) { item in
-                    Button(item.rawValue) { tab = item }
+                    Button(item.rawValue) { select(item) }
                         .buttonStyle(TabButtonStyle(isActive: tab == item))
                 }
             }
@@ -54,6 +55,13 @@ struct MainView: View {
         .padding(.horizontal, 28)
         .padding(.top, 36)
         .padding(.bottom, 16)
+    }
+
+    /// ⌥⌘P starts whichever of Script or Checklist you last had open.
+    private func select(_ item: Tab) {
+        tab = item
+        let mode: PromptMode? = item == .script ? .script : item == .checklist ? .checklist : nil
+        if let mode, !prompter.isPresenting { Prefs.defaults.set(mode.rawValue, forKey: Prefs.mode) }
     }
 }
 
