@@ -287,7 +287,7 @@ final class Prompter: ObservableObject {
         guard !judging, checkingItem == nil, itemCursor < items.count else { return }
         let index = itemCursor
         let words = recentWords
-        guard words.count >= 3 else { return }
+        guard !words.isEmpty else { return }
         judging = true
         judgedWordCount = wordsForItem.count
         lastJudged = Date()
