@@ -31,7 +31,7 @@ final class Prompter: ObservableObject {
     private var heardForItem: [String] = []
     private var utterance: [String] = []
     private var staleInUtterance = 0
-    private var judgedWordCount = 0
+    private var judgedWords: [String] = []
     private var lastJudged = Date.distantPast
     private var judging = false
     private var judgeTimer: Timer?
@@ -264,7 +264,7 @@ final class Prompter: ObservableObject {
             if TopicMatcher.covers(keywords: itemKeywords[itemCursor + 1], spoken: latest, strict: ChecklistJudge.isReady) {
                 guard ChecklistJudge.isReady else { return checkOff(carrying: Array(recent.suffix(30))) }
                 judgeTimer?.invalidate()
-                if wordsForItem.count > judgedWordCount { judge() }
+                if wordsForItem != judgedWords { judge() }
                 return
             }
         }
@@ -274,9 +274,9 @@ final class Prompter: ObservableObject {
     /// Asks the model after a short pause in speech, or every couple of seconds while you keep talking.
     /// A couple of new words, like "moving on", wait for the pause.
     private func scheduleJudge() {
-        guard ChecklistJudge.isReady, wordsForItem.count > judgedWordCount else { return }
+        guard ChecklistJudge.isReady, wordsForItem != judgedWords else { return }
         judgeTimer?.invalidate()
-        let fewNewWords = wordsForItem.count < judgedWordCount + 3
+        let fewNewWords = wordsForItem.count < judgedWords.count + 3
         let delay = !fewNewWords && Date().timeIntervalSince(lastJudged) > 2.5 ? 0 : 0.7
         judgeTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.judge() }
@@ -289,7 +289,7 @@ final class Prompter: ObservableObject {
         let words = recentWords
         guard !words.isEmpty else { return }
         judging = true
-        judgedWordCount = wordsForItem.count
+        judgedWords = wordsForItem
         lastJudged = Date()
         let previous = index > 0 ? items[index - 1] : nil
         let next = index + 1 < items.count ? items[index + 1] : nil
@@ -300,7 +300,7 @@ final class Prompter: ObservableObject {
             judging = false
             if covered == true, index == itemCursor, checkingItem == nil {
                 checkOff()
-            } else if wordsForItem.count > judgedWordCount {
+            } else if wordsForItem != judgedWords {
                 scheduleJudge()
             }
         }
@@ -333,7 +333,7 @@ final class Prompter: ObservableObject {
     private func resetHeard() {
         heardForItem = []
         staleInUtterance = utterance.count
-        judgedWordCount = 0
+        judgedWords = []
         judgeTimer?.invalidate()
     }
 
