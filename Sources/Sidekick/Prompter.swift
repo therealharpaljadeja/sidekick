@@ -320,7 +320,8 @@ final class Prompter: ObservableObject {
             }
         }
         guard itemCursor == items.count - 1 else { return }
-        if itemCursor == 0 {
+        // With nothing before it, or a previous item that means the same, there's nothing to tell apart.
+        if itemCursor == 0 || SentenceEmbedder.similarity(itemVectors[itemCursor], itemVectors[itemCursor - 1]) > 0.95 {
             finalTopicHeard = true
         } else if let spoken = try? embedder.embed(recent.suffix(12).joined(separator: " ")) {
             let last = SentenceEmbedder.similarity(spoken, itemVectors[itemCursor])
