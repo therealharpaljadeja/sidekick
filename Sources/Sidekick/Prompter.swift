@@ -48,6 +48,11 @@ final class Prompter: ObservableObject {
         return try? SentenceEmbedder(model: model, vocabulary: vocabulary)
     }()
 
+    /// The sentence model only knows English, so other languages keep the older matching.
+    var followsParaphrasing: Bool {
+        Self.embedder != nil && itemVectors.count == items.count && speech.localeIdentifier.hasPrefix("en")
+    }
+
     private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Sidekick", category: "checklist")
 
     var isFinished: Bool {
@@ -273,7 +278,7 @@ final class Prompter: ObservableObject {
         let newest = utterance.dropFirst(min(staleInUtterance, utterance.count)).suffix(8)
         if TopicMatcher.wrapsUp(Array(newest)) { return checkOff() }
         let recent = recentWords
-        if let embedder = Self.embedder, itemVectors.count == items.count {
+        if followsParaphrasing, let embedder = Self.embedder {
             return followTopic(with: embedder, recent: recent)
         }
         let spoken = TopicMatcher.lemmas(in: recent.joined(separator: " "))

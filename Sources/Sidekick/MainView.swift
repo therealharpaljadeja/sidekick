@@ -167,7 +167,7 @@ private struct ChecklistPane: View {
             .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Theme.surface))
             .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.hairline, lineWidth: 1))
 
-            if Prompter.embedder != nil {
+            if prompter.followsParaphrasing {
                 Text("Follows what you say, even paraphrased, and moves on when you start a later item. ⌥⌘→ ticks an item off by hand.")
                     .font(Theme.intern(12))
                     .foregroundColor(Theme.secondary)
