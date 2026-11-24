@@ -22,7 +22,14 @@ final class SpeechFollower: ObservableObject {
     var onFailure: ((String) -> Void)?
 
     var localeIdentifier = "en-US"
-    var contextualStrings: [String] = []
+    var contextualStrings: [String] = [] {
+        didSet {
+            if #available(macOS 26.0, *), let analyzer = analyzer as? SpeechAnalyzer {
+                let context = Self.context(for: contextualStrings)
+                Task { try? await analyzer.setContext(context) }
+            }
+        }
+    }
 
     private let engine = AVAudioEngine()
     private let box = RequestBox()
@@ -33,6 +40,15 @@ final class SpeechFollower: ObservableObject {
     private var recentFailures: [Date] = []
     private var configObserver: NSObjectProtocol?
     private var lastWords: [String] = []
+
+    // On macOS 26, SpeechAnalyzer takes over from SFSpeechRecognizer once its model is ready.
+    private var session = 0
+    private var analyzer: AnyObject?
+    private var analyzerFeed: AnyObject?
+    private var analyzerTask: Task<Void, Never>?
+    private var finalWords: [String] = []
+    private var volatileWords: [String] = []
+    private var segmentStartSeconds: Double = 0
 
     /// Segments are rotated before Apple's ~1 minute per-request limit.
     private let segmentLength: TimeInterval = 50
@@ -78,10 +94,13 @@ final class SpeechFollower: ObservableObject {
         recentFailures = []
         observeConfigurationChanges()
         beginSegment()
+        if #available(macOS 26.0, *) { startAnalyzer(locale: locale, inputFormat: format) }
     }
 
     func stop() {
         generation += 1
+        session += 1
+        stopAnalyzer()
         rotateTimer?.invalidate()
         rotateTimer = nil
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
@@ -99,6 +118,9 @@ final class SpeechFollower: ObservableObject {
     /// Starts a fresh recognition segment (used after the script position jumps).
     func restartSegment() {
         guard state == .listening else { return }
+        if #available(macOS 26.0, *), let feed = analyzerFeed as? AnalyzerFeed {
+            return beginAnalyzerSegment(at: feed.seconds)
+        }
         beginSegment()
     }
 
@@ -154,6 +176,111 @@ final class SpeechFollower: ObservableObject {
                 self.restartSegment()
             }
         }
+    }
+
+    @available(macOS 26.0, *)
+    private func startAnalyzer(locale: Locale, inputFormat: AVAudioFormat) {
+        let id = session
+        let hints = contextualStrings
+        analyzerTask = Task { [weak self] in
+            guard SpeechTranscriber.isAvailable,
+                  let supported = await SpeechTranscriber.supportedLocale(equivalentTo: locale) else { return }
+            let transcriber = SpeechTranscriber(
+                locale: supported, transcriptionOptions: [],
+                reportingOptions: [.volatileResults, .fastResults], attributeOptions: [])
+            do {
+                guard await AssetInventory.status(forModules: [transcriber]) != .unsupported else { return }
+                _ = try? await AssetInventory.reserve(locale: supported)
+                // The first time, this downloads Apple's speech model while the older recognizer keeps listening.
+                if let install = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
+                    try await install.downloadAndInstall()
+                }
+                guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(
+                    compatibleWith: [transcriber], considering: inputFormat) else { return }
+                let analyzer = SpeechAnalyzer(modules: [transcriber])
+                try await analyzer.setContext(Self.context(for: hints))
+                try await analyzer.prepareToAnalyze(in: format)
+                let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
+                guard let feed = AnalyzerFeed(from: inputFormat, to: format, continuation: continuation),
+                      let self, self.session == id, self.state == .listening
+                else { await analyzer.cancelAndFinishNow(); return }
+                self.switchToAnalyzer(analyzer, feed: feed)
+                try await analyzer.start(inputSequence: stream)
+                for try await result in transcriber.results {
+                    guard self.session == id else { break }
+                    self.handle(result)
+                }
+            } catch {
+                guard let self, self.session == id, self.state == .listening, self.analyzer != nil else { return }
+                // Fall back to the older recognizer for the rest of this session.
+                self.stopAnalyzer()
+                self.beginSegment()
+            }
+        }
+    }
+
+    @available(macOS 26.0, *)
+    private func switchToAnalyzer(_ analyzer: SpeechAnalyzer, feed: AnalyzerFeed) {
+        generation += 1
+        rotateTimer?.invalidate()
+        rotateTimer = nil
+        box.request?.endAudio()
+        task?.cancel()
+        task = nil
+        self.analyzer = analyzer
+        analyzerFeed = feed
+        box.setFeed(feed.append)
+        isOnDevice = true
+        beginAnalyzerSegment(at: feed.seconds)
+    }
+
+    @available(macOS 26.0, *)
+    private func beginAnalyzerSegment(at seconds: Double) {
+        finalWords = []
+        volatileWords = []
+        lastWords = []
+        segmentStartSeconds = seconds
+        onSegmentStart?()
+    }
+
+    @available(macOS 26.0, *)
+    private func handle(_ result: SpeechTranscriber.Result) {
+        guard state == .listening, result.range.end.seconds > segmentStartSeconds else { return }
+        let words = String(result.text.characters)
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+            .filter { $0.contains { $0.isLetter || $0.isNumber } }
+        if result.isFinal {
+            finalWords += words
+            volatileWords = []
+        } else {
+            volatileWords = words
+        }
+        let all = finalWords + volatileWords
+        guard !all.isEmpty else { return }
+        lastWords = all
+        onWords?(all)
+        // Keep segments short, like the older recognizer's, so word counts stay small.
+        if result.isFinal, finalWords.count > 150 { beginAnalyzerSegment(at: result.range.end.seconds) }
+    }
+
+    private func stopAnalyzer() {
+        analyzerTask?.cancel()
+        analyzerTask = nil
+        box.setFeed(nil)
+        if #available(macOS 26.0, *) {
+            (analyzerFeed as? AnalyzerFeed)?.finish()
+            if let analyzer = analyzer as? SpeechAnalyzer { Task { await analyzer.cancelAndFinishNow() } }
+        }
+        analyzer = nil
+        analyzerFeed = nil
+    }
+
+    @available(macOS 26.0, *)
+    private static func context(for hints: [String]) -> AnalysisContext {
+        let context = AnalysisContext()
+        context.contextualStrings[.general] = hints
+        return context
     }
 
     fileprivate func updateLevel(_ value: Float) {
@@ -232,6 +359,11 @@ enum FollowerError: LocalizedError {
 private final class RequestBox: @unchecked Sendable {
     private let lock = NSLock()
     private var _request: SFSpeechAudioBufferRecognitionRequest?
+    private var feed: ((AVAudioPCMBuffer) -> Void)?
+
+    func setFeed(_ newValue: ((AVAudioPCMBuffer) -> Void)?) {
+        lock.lock(); feed = newValue; lock.unlock()
+    }
 
     var request: SFSpeechAudioBufferRecognitionRequest? {
         get { lock.lock(); defer { lock.unlock() }; return _request }
@@ -240,7 +372,55 @@ private final class RequestBox: @unchecked Sendable {
 
     func append(_ buffer: AVAudioPCMBuffer) {
         lock.lock()
-        _request?.append(buffer)
+        if let feed { feed(buffer) } else { _request?.append(buffer) }
         lock.unlock()
     }
+}
+
+/// Converts microphone buffers to the analyzer's format and streams them in, counting the audio fed.
+@available(macOS 26.0, *)
+private final class AnalyzerFeed: @unchecked Sendable {
+    private let converter: AVAudioConverter?
+    private let format: AVAudioFormat
+    private let continuation: AsyncStream<AnalyzerInput>.Continuation
+    private let lock = NSLock()
+    private var frames: Int64 = 0
+
+    init?(from input: AVAudioFormat, to format: AVAudioFormat, continuation: AsyncStream<AnalyzerInput>.Continuation) {
+        if input == format {
+            converter = nil
+        } else {
+            guard let converter = AVAudioConverter(from: input, to: format) else { return nil }
+            self.converter = converter
+        }
+        self.format = format
+        self.continuation = continuation
+    }
+
+    var seconds: Double {
+        lock.lock(); defer { lock.unlock() }
+        return Double(frames) / format.sampleRate
+    }
+
+    func append(_ buffer: AVAudioPCMBuffer) {
+        var output = buffer
+        if let converter {
+            let capacity = AVAudioFrameCount(Double(buffer.frameLength) * format.sampleRate / buffer.format.sampleRate) + 1
+            guard let converted = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return }
+            var supplied = false
+            var error: NSError?
+            converter.convert(to: converted, error: &error) { _, status in
+                if supplied { status.pointee = .noDataNow; return nil }
+                supplied = true
+                status.pointee = .haveData
+                return buffer
+            }
+            guard error == nil, converted.frameLength > 0 else { return }
+            output = converted
+        }
+        lock.lock(); frames += Int64(output.frameLength); lock.unlock()
+        continuation.yield(AnalyzerInput(buffer: output))
+    }
+
+    func finish() { continuation.finish() }
 }
