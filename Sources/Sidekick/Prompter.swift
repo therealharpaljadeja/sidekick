@@ -262,7 +262,7 @@ final class Prompter: ObservableObject {
         if itemCursor + 1 < items.count {
             let latest = TopicMatcher.lemmas(in: recent.suffix(30).joined(separator: " "))
             if TopicMatcher.covers(keywords: itemKeywords[itemCursor + 1], spoken: latest, strict: ChecklistJudge.isReady) {
-                guard ChecklistJudge.isReady else { return checkOff() }
+                guard ChecklistJudge.isReady else { return checkOff(carrying: Array(recent.suffix(30))) }
                 judgeTimer?.invalidate()
                 if wordsForItem.count > judgedWordCount { judge() }
                 return
@@ -304,11 +304,13 @@ final class Prompter: ObservableObject {
         }
     }
 
-    private func checkOff() {
+    /// `carrying` words still count toward the item after this one, such as the ones that introduced it.
+    private func checkOff(carrying: [String] = []) {
         guard checkingItem == nil, itemCursor < items.count else { return }
         let index = itemCursor
         checkingItem = index
         resetHeard()
+        heardForItem = carrying
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, self.checkingItem == index else { return }
