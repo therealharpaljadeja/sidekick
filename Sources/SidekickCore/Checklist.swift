@@ -31,7 +31,7 @@ public enum TopicMatcher {
     ]
 
     private static let wrapUps = [
-        "moving on", "moving onto", "move on", "move onto", "next item", "next point",
+        "moving on", "moving onto", "move on", "move onto",
         "im done", "i am done", "done with this", "thats it for",
     ]
 

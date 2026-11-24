@@ -7,7 +7,7 @@ All notable changes to Sidekick are listed here. The format follows [Keep a Chan
 ### Changed
 
 - With Apple Intelligence on, a checklist item ticks off only once you say you're done with it or start a later one, not as soon as you start talking about it. If you've already covered the next item too, both tick off.
-- Saying "moving on", "next item" or "I'm done" ticks off the current checklist item straight away.
+- Saying "moving on" or "I'm done" ticks off the current checklist item straight away.
 - Speech recognition now expects the words in your checklist, so names like "Monad" or "docs" are heard correctly more often.
 
 ### Added
