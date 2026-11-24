@@ -257,11 +257,15 @@ final class Prompter: ObservableObject {
         if !ChecklistJudge.isReady, TopicMatcher.covers(keywords: itemKeywords[itemCursor], spoken: spoken, strict: false) {
             return checkOff()
         }
-        // Saying the next item's key words means you've moved on from this one.
+        // Saying the next item's key words suggests you've moved on from this one. With Apple Intelligence,
+        // ask the model right away, since you might only be previewing it.
         if itemCursor + 1 < items.count {
             let latest = TopicMatcher.lemmas(in: recent.suffix(30).joined(separator: " "))
             if TopicMatcher.covers(keywords: itemKeywords[itemCursor + 1], spoken: latest, strict: ChecklistJudge.isReady) {
-                return checkOff()
+                guard ChecklistJudge.isReady else { return checkOff() }
+                judgeTimer?.invalidate()
+                if wordsForItem.count > judgedWordCount { judge() }
+                return
             }
         }
         scheduleJudge()
