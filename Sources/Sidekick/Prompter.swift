@@ -292,22 +292,23 @@ final class Prompter: ObservableObject {
         judgedWords = wordsForItem
         lastJudged = Date()
         let previous = index > 0 ? items[index - 1] : nil
-        let next = index + 1 < items.count ? items[index + 1] : nil
+        let upcoming = Array(items[index..<min(index + 3, items.count)])
         Task {
-            let covered = await ChecklistJudge.covers(
-                item: items[index], previous: previous, next: next, transcript: words.joined(separator: " ")
+            let done = await ChecklistJudge.itemsDone(
+                upcoming: upcoming, previous: previous, transcript: words.joined(separator: " ")
             )
             judging = false
-            if covered == true, index == itemCursor, checkingItem == nil {
-                checkOff()
+            if let done, done > 0, index == itemCursor, checkingItem == nil {
+                checkOff(through: index + done - 1)
             } else if wordsForItem != judgedWords {
                 scheduleJudge()
             }
         }
     }
 
-    /// `carrying` words still count toward the item after this one, such as the ones that introduced it.
-    private func checkOff(carrying: [String] = []) {
+    /// Ticks off the current item, and every item up to `last` if you've already covered those too.
+    /// `carrying` words still count toward the item after, such as the ones that introduced it.
+    private func checkOff(through last: Int? = nil, carrying: [String] = []) {
         guard checkingItem == nil, itemCursor < items.count else { return }
         let index = itemCursor
         checkingItem = index
@@ -317,7 +318,7 @@ final class Prompter: ObservableObject {
             MainActor.assumeIsolated {
                 guard let self, self.checkingItem == index else { return }
                 self.checkingItem = nil
-                self.itemCursor = index + 1
+                self.itemCursor = min(max(last ?? index, index), self.items.count - 1) + 1
                 if self.isFinished { self.pauseWhenDone() }
             }
         }
