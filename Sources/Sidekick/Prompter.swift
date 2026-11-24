@@ -272,10 +272,12 @@ final class Prompter: ObservableObject {
     }
 
     /// Asks the model after a short pause in speech, or every couple of seconds while you keep talking.
+    /// A couple of new words, like "moving on", wait for the pause.
     private func scheduleJudge() {
-        guard ChecklistJudge.isReady, wordsForItem.count >= judgedWordCount + 3 else { return }
+        guard ChecklistJudge.isReady, wordsForItem.count > judgedWordCount else { return }
         judgeTimer?.invalidate()
-        let delay = Date().timeIntervalSince(lastJudged) > 2.5 ? 0 : 0.7
+        let fewNewWords = wordsForItem.count < judgedWordCount + 3
+        let delay = !fewNewWords && Date().timeIntervalSince(lastJudged) > 2.5 ? 0 : 0.7
         judgeTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.judge() }
         }
@@ -298,7 +300,7 @@ final class Prompter: ObservableObject {
             judging = false
             if covered == true, index == itemCursor, checkingItem == nil {
                 checkOff()
-            } else if wordsForItem.count >= judgedWordCount + 3 {
+            } else if wordsForItem.count > judgedWordCount {
                 scheduleJudge()
             }
         }
