@@ -37,7 +37,8 @@ public enum TopicMatcher {
 
     /// True if the words wrap up a talking point out loud, like "moving on" or "I'm done".
     public static func wrapsUp(_ words: [String]) -> Bool {
-        let text = " " + words.map { $0.lowercased().filter(\.isLetter) }.joined(separator: " ") + " "
+        let tokens = words.joined(separator: " ").lowercased().split(whereSeparator: \.isWhitespace)
+        let text = " " + tokens.map { $0.filter(\.isLetter) }.joined(separator: " ") + " "
         return wrapUps.contains { text.contains(" \($0) ") }
     }
 

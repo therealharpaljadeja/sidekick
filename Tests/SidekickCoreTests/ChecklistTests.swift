@@ -60,6 +60,8 @@ final class ChecklistTests: XCTestCase {
         XCTAssertTrue(TopicMatcher.wrapsUp("so I am done Moving on".split(separator: " ").map(String.init)))
         XCTAssertTrue(TopicMatcher.wrapsUp("that’s it for the docs".split(separator: " ").map(String.init)))
         XCTAssertTrue(TopicMatcher.wrapsUp(["I'm", "done"]))
+        XCTAssertTrue(TopicMatcher.wrapsUp(["okay", "moving on"]))
+        XCTAssertFalse(TopicMatcher.wrapsUp("to select the next item press down".split(separator: " ").map(String.init)))
         XCTAssertFalse(TopicMatcher.wrapsUp("the moving parts are done online".split(separator: " ").map(String.init)))
     }
 }
