@@ -55,4 +55,11 @@ final class ChecklistTests: XCTestCase {
         let keywords = TopicMatcher.keywords(for: "Discovery")
         XCTAssertFalse(TopicMatcher.covers(keywords: keywords, spoken: TopicMatcher.lemmas(in: "discount"), strict: true))
     }
+
+    func testWrapUpPhrases() {
+        XCTAssertTrue(TopicMatcher.wrapsUp("so I am done Moving on".split(separator: " ").map(String.init)))
+        XCTAssertTrue(TopicMatcher.wrapsUp("that’s it for the docs".split(separator: " ").map(String.init)))
+        XCTAssertTrue(TopicMatcher.wrapsUp(["I'm", "done"]))
+        XCTAssertFalse(TopicMatcher.wrapsUp("the moving parts are done online".split(separator: " ").map(String.init)))
+    }
 }

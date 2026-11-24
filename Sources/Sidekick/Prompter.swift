@@ -225,8 +225,11 @@ final class Prompter: ObservableObject {
     }
 
     private var checklistPhrases: [String] {
+        // Whole items and their key words as written, so names like "Monad" or "docs" are expected.
+        let words = items.flatMap { $0.split(separator: " ").map { $0.trimmingCharacters(in: .punctuationCharacters) } }
+            .filter { $0.count >= 3 && !TopicMatcher.keywords(for: $0).isEmpty }
         var seen = Set<String>()
-        return Array(itemKeywords.joined().filter { $0.count >= 4 && seen.insert($0).inserted }.prefix(100))
+        return Array((items + words).filter { seen.insert($0.lowercased()).inserted }.prefix(100))
     }
 
     private func pauseWhenDone() {
@@ -251,6 +254,9 @@ final class Prompter: ObservableObject {
     private func heardChecklist(_ words: [String]) {
         utterance = words
         guard checkingItem == nil, itemCursor < items.count else { return }
+        // Saying "moving on" or "I'm done" ticks the current item off, whatever the model thinks.
+        let newest = utterance.dropFirst(min(staleInUtterance, utterance.count)).suffix(8)
+        if TopicMatcher.wrapsUp(Array(newest)) { return checkOff() }
         let recent = recentWords
         let spoken = TopicMatcher.lemmas(in: recent.joined(separator: " "))
         // With Apple Intelligence, key words only show you've started an item, so the model decides when it's done.
