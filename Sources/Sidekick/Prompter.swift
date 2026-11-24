@@ -39,6 +39,7 @@ final class Prompter: ObservableObject {
     private var itemVectors: [[Float]] = []
     private var topicTracker = TopicTracker()
     private var lastItemTimer: Timer?
+    private var finalTopicHeard = false
 
     /// The bundled sentence model, which follows paraphrased checklist items on any Mac.
     static let embedder: SentenceEmbedder? = {
@@ -311,17 +312,33 @@ final class Prompter: ObservableObject {
             scores \(scores.map { String(format: "%.2f", $0) }.joined(separator: " "), privacy: .public) · \
             heard “\(recent.suffix(12).joined(separator: " "), privacy: .public)”
             """)
-            if moved > 0 { return checkOff(through: itemCursor + moved - 1) }
+            if moved > 0 {
+                let landsOnLast = itemCursor + moved == items.count - 1
+                checkOff(through: itemCursor + moved - 1, carrying: Array(recent.suffix(12)))
+                finalTopicHeard = landsOnLast
+                return
+            }
         }
-        // The last item has nothing after it, so it ticks off once you've talked about it and gone quiet.
-        if itemCursor == items.count - 1, wordsForItem.count >= 10 {
-            let index = itemCursor
-            lastItemTimer?.invalidate()
-            lastItemTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: false) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let self, self.itemCursor == index, self.isListening else { return }
-                    self.checkOff()
-                }
+        guard itemCursor == items.count - 1 else { return }
+        if itemCursor == 0 {
+            finalTopicHeard = true
+        } else if let spoken = try? embedder.embed(recent.suffix(12).joined(separator: " ")) {
+            let last = SentenceEmbedder.similarity(spoken, itemVectors[itemCursor])
+            let previous = SentenceEmbedder.similarity(spoken, itemVectors[itemCursor - 1])
+            if last - previous > topicTracker.margin { finalTopicHeard = true }
+        }
+        armLastItem()
+    }
+
+    /// The last item has nothing after it, so it ticks off once you've talked about it and gone quiet.
+    private func armLastItem() {
+        lastItemTimer?.invalidate()
+        guard followsParaphrasing, itemCursor == items.count - 1, finalTopicHeard, wordsForItem.count >= 6 else { return }
+        let index = itemCursor
+        lastItemTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.itemCursor == index, self.isListening else { return }
+                self.checkOff()
             }
         }
     }
@@ -374,7 +391,7 @@ final class Prompter: ObservableObject {
                 guard let self, self.checkingItem == index else { return }
                 self.checkingItem = nil
                 self.itemCursor = min(max(last ?? index, index), self.items.count - 1) + 1
-                if self.isFinished { self.pauseWhenDone() }
+                if self.isFinished { self.pauseWhenDone() } else { self.armLastItem() }
             }
         }
     }
@@ -392,6 +409,7 @@ final class Prompter: ObservableObject {
         judgedWords = []
         topicTracker.reset()
         lastItemTimer?.invalidate()
+        finalTopicHeard = false
         judgeTimer?.invalidate()
     }
 

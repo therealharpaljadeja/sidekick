@@ -8,7 +8,7 @@ All notable changes to Sidekick are listed here. The format follows [Keep a Chan
 
 - With Apple Intelligence on, a checklist item ticks off only once you say you're done with it or start a later one, not as soon as you start talking about it. If you've already covered the next item too, both tick off.
 - On macOS 26, speech recognition switches to Apple's newer SpeechAnalyzer model once it's downloaded, with your script or checklist words as hints. Older macOS versions keep the previous recognizer.
-- Checklist mode now follows paraphrasing on every Mac with a small on-device sentence model (bge-small, about 30 MB) bundled in the app. An item ticks off once you're clearly talking about a later one. The last item ticks off after you've covered it and gone quiet for 8 seconds.
+- Checklist mode now follows paraphrasing on every Mac with a small on-device sentence model (bge-small, about 30 MB) bundled in the app. An item ticks off once you're clearly talking about a later one. The last item ticks off once you're clearly talking about it and then go quiet for 8 seconds.
 - Saying "moving on" or "I'm done" ticks off the current checklist item straight away.
 - Speech recognition now expects the words in your checklist, so names like "Monad" or "docs" are heard correctly more often.
 
