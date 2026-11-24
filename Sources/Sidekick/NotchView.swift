@@ -41,7 +41,7 @@ struct NotchView: View {
                 StatusLabel()
                 Spacer(minLength: geometry.hasNotch ? geometry.notchSize.width + 16 : 16)
                 HStack(spacing: 12) {
-                    if prompter.mode == .checklist, !ChecklistJudge.isReady {
+                    if prompter.mode == .checklist, !prompter.followsParaphrasing, !ChecklistJudge.isReady {
                         Text("Key words only")
                             .font(Theme.intern(11, .medium))
                             .foregroundColor(Theme.secondary)

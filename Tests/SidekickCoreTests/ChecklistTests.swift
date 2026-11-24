@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import SidekickCore
 
@@ -54,5 +55,54 @@ final class ChecklistTests: XCTestCase {
     func testStrictIgnoresSharedPrefix() {
         let keywords = TopicMatcher.keywords(for: "Discovery")
         XCTAssertFalse(TopicMatcher.covers(keywords: keywords, spoken: TopicMatcher.lemmas(in: "discount"), strict: true))
+    }
+
+    func testWrapUpPhrases() {
+        XCTAssertTrue(TopicMatcher.wrapsUp("so I am done Moving on".split(separator: " ").map(String.init)))
+        XCTAssertTrue(TopicMatcher.wrapsUp("that’s it for the docs".split(separator: " ").map(String.init)))
+        XCTAssertTrue(TopicMatcher.wrapsUp(["I'm", "done"]))
+        XCTAssertTrue(TopicMatcher.wrapsUp(["okay", "moving on"]))
+        XCTAssertFalse(TopicMatcher.wrapsUp("to select the next item press down".split(separator: " ").map(String.init)))
+        XCTAssertFalse(TopicMatcher.wrapsUp("the moving parts are done online".split(separator: " ").map(String.init)))
+    }
+
+    func testTrackerNeedsASustainedLead() {
+        var tracker = TopicTracker(margin: 0.05, wordsToHold: 3, floor: 0, skipFloor: 0)
+        XCTAssertEqual(tracker.update(scores: [0.7, 0.8, 0.5], heard: 1), 0)
+        XCTAssertEqual(tracker.update(scores: [0.7, 0.6, 0.5], heard: 2), 0)
+        XCTAssertEqual(tracker.update(scores: [0.6, 0.8, 0.5], heard: 3), 0)
+        XCTAssertEqual(tracker.update(scores: [0.6, 0.8, 0.5], heard: 3), 0)
+        XCTAssertEqual(tracker.update(scores: [0.6, 0.8, 0.5], heard: 4), 0)
+        XCTAssertEqual(tracker.update(scores: [0.6, 0.8, 0.5], heard: 5), 1)
+    }
+
+    func testTrackerSkipsToTheItemYoureOn() {
+        var tracker = TopicTracker(margin: 0.05, wordsToHold: 2, floor: 0, skipFloor: 0)
+        XCTAssertEqual(tracker.update(scores: [0.5, 0.6, 0.8], heard: 10), 0)
+        XCTAssertEqual(tracker.update(scores: [0.5, 0.6, 0.8], heard: 11), 2)
+    }
+
+    func testTrackerIgnoresWeakMatches() {
+        // From a real run: small talk scored a little higher for the item after next, and skipped one.
+        var tracker = TopicTracker()
+        for heard in 1...10 { XCTAssertEqual(tracker.update(scores: [0.50, 0.52, 0.60], heard: heard), 0) }
+        for heard in 11...20 { XCTAssertEqual(tracker.update(scores: [0.55, 0.50, 0.70], heard: heard), 0) }
+        var moved = 0
+        for heard in 21...26 { moved = tracker.update(scores: [0.60, 0.82, 0.62], heard: heard) }
+        XCTAssertEqual(moved, 1)
+    }
+
+    func testTrackerMovesToNextWhenSkipIsTooWeak() {
+        var tracker = TopicTracker(wordsToHold: 2)
+        XCTAssertEqual(tracker.update(scores: [0.50, 0.70, 0.72], heard: 1), 0)
+        XCTAssertEqual(tracker.update(scores: [0.50, 0.70, 0.72], heard: 2), 1)
+    }
+
+    func testTokenizerMatchesBert() throws {
+        let vocab = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../Resources/Model/vocab.txt").standardizedFileURL
+        let tokenizer = try WordPieceTokenizer(vocabulary: vocab)
+        XCTAssertEqual(Array(tokenizer.encode("So when you know I'm using command-H, it's café").ids.prefix(18)),
+                       [101, 2061, 2043, 2017, 2113, 1045, 1005, 1049, 2478, 3094, 1011, 1044, 1010, 2009, 1005, 1055, 7668, 102])
     }
 }

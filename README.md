@@ -72,7 +72,7 @@ Click the notch to pause or resume; scroll over it to nudge word by word. **Sett
 
 No word-for-word script? Put one talking point per line in the **Checklist** tab (bullets, numbers and `[ ]` boxes are fine) and click **Start in notch**. The notch shows the current item in white and the next ones in grey. Talk about it in your own words; once Sidekick hears you cover it, the item ticks off and rolls away.
 
-- On macOS 26 with Apple Intelligence on, Sidekick uses Apple's on-device model to tell when you've moved onto an item, even if you paraphrase. Nothing leaves your Mac.
+- On macOS 26 with Apple Intelligence on, Sidekick uses Apple's on-device model to tell when you've finished an item ("that's it for…", "moving on") or started the next one, even if you paraphrase. Nothing leaves your Mac.
 - Without Apple Intelligence it matches the item's key words (so "Hide the notch from screen recordings" ticks off when you say something like "I'm hiding the notch so the screen recording can't see it").
 - If Apple Intelligence isn't available, the Checklist tab says why and the notch shows **Key words only**.
 - To see why the model did or didn't tick an item, run `log stream --level debug --predicate 'subsystem == "com.harpaljadeja.sidekick"'` while presenting.

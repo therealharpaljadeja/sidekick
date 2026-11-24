@@ -1,3 +1,4 @@
+import os
 import Combine
 import Foundation
 import SidekickCore
@@ -31,10 +32,29 @@ final class Prompter: ObservableObject {
     private var heardForItem: [String] = []
     private var utterance: [String] = []
     private var staleInUtterance = 0
-    private var judgedWordCount = 0
+    private var judgedWords: [String] = []
     private var lastJudged = Date.distantPast
     private var judging = false
     private var judgeTimer: Timer?
+    private var itemVectors: [[Float]] = []
+    private var topicTracker = TopicTracker()
+    private var lastItemTimer: Timer?
+    private var finalTopicHeard = false
+
+    /// The bundled sentence model, which follows paraphrased checklist items on any Mac.
+    static let embedder: SentenceEmbedder? = {
+        guard let model = Bundle.main.url(forResource: "SentenceEmbedding", withExtension: "mlmodelc"),
+              let vocabulary = Bundle.main.url(forResource: "vocab", withExtension: "txt")
+        else { return nil }
+        return try? SentenceEmbedder(model: model, vocabulary: vocabulary)
+    }()
+
+    /// The sentence model only knows English, so other languages keep the older matching.
+    var followsParaphrasing: Bool {
+        Self.embedder != nil && itemVectors.count == items.count && speech.localeIdentifier.hasPrefix("en")
+    }
+
+    private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Sidekick", category: "checklist")
 
     var isFinished: Bool {
         switch mode {
@@ -90,6 +110,7 @@ final class Prompter: ObservableObject {
         }.count
         items = parsed
         itemKeywords = parsed.map(TopicMatcher.keywords(for:))
+        itemVectors = Self.embedder.map { embedder in parsed.map { (try? embedder.embed($0)) ?? [] } } ?? []
         itemCursor = kept
         checkingItem = nil
         resetHeard()
@@ -225,8 +246,11 @@ final class Prompter: ObservableObject {
     }
 
     private var checklistPhrases: [String] {
+        // Whole items and their key words as written, so names like "Monad" or "docs" are expected.
+        let words = items.flatMap { $0.split(separator: " ").map { $0.trimmingCharacters(in: .punctuationCharacters) } }
+            .filter { $0.count >= 3 && !TopicMatcher.keywords(for: $0).isEmpty }
         var seen = Set<String>()
-        return Array(itemKeywords.joined().filter { $0.count >= 4 && seen.insert($0).inserted }.prefix(100))
+        return Array((items + words).filter { seen.insert($0.lowercased()).inserted }.prefix(100))
     }
 
     private func pauseWhenDone() {
@@ -251,19 +275,82 @@ final class Prompter: ObservableObject {
     private func heardChecklist(_ words: [String]) {
         utterance = words
         guard checkingItem == nil, itemCursor < items.count else { return }
+        // Saying "moving on" or "I'm done" ticks the current item off, whatever the model thinks.
+        let newest = utterance.dropFirst(min(staleInUtterance, utterance.count)).suffix(8)
+        if TopicMatcher.wrapsUp(Array(newest)) { return checkOff() }
         let recent = recentWords
+        if followsParaphrasing, let embedder = Self.embedder {
+            return followTopic(with: embedder, recent: recent)
+        }
         let spoken = TopicMatcher.lemmas(in: recent.joined(separator: " "))
-        if TopicMatcher.covers(keywords: itemKeywords[itemCursor], spoken: spoken, strict: ChecklistJudge.isReady) {
+        // With Apple Intelligence, key words only show you've started an item, so the model decides when it's done.
+        if !ChecklistJudge.isReady, TopicMatcher.covers(keywords: itemKeywords[itemCursor], spoken: spoken, strict: false) {
             return checkOff()
+        }
+        // Saying the next item's key words suggests you've moved on from this one. With Apple Intelligence,
+        // ask the model right away, since you might only be previewing it.
+        if itemCursor + 1 < items.count {
+            let latest = TopicMatcher.lemmas(in: recent.suffix(30).joined(separator: " "))
+            if TopicMatcher.covers(keywords: itemKeywords[itemCursor + 1], spoken: latest, strict: ChecklistJudge.isReady) {
+                guard ChecklistJudge.isReady else { return checkOff(carrying: Array(recent.suffix(30))) }
+                judgeTimer?.invalidate()
+                if wordsForItem != judgedWords { judge() }
+                return
+            }
         }
         scheduleJudge()
     }
 
+    /// Moves on once your latest words clearly match a later item better than the current one.
+    private func followTopic(with embedder: SentenceEmbedder, recent: [String]) {
+        let upcoming = Array(itemCursor..<min(itemCursor + 3, items.count))
+        if upcoming.count > 1, let spoken = try? embedder.embed(recent.suffix(12).joined(separator: " ")) {
+            let scores = upcoming.map { SentenceEmbedder.similarity(spoken, itemVectors[$0]) }
+            let moved = topicTracker.update(scores: scores, heard: wordsForItem.count)
+            Self.log.debug("""
+            \(moved > 0 ? "moved on" : "on", privacy: .public) · \(self.items[self.itemCursor], privacy: .public) · \
+            scores \(scores.map { String(format: "%.2f", $0) }.joined(separator: " "), privacy: .public) · \
+            heard “\(recent.suffix(12).joined(separator: " "), privacy: .public)”
+            """)
+            if moved > 0 {
+                let landsOnLast = itemCursor + moved == items.count - 1
+                checkOff(through: itemCursor + moved - 1, carrying: Array(recent.suffix(12)))
+                finalTopicHeard = landsOnLast
+                return
+            }
+        }
+        guard itemCursor == items.count - 1 else { return }
+        // With nothing before it, or a previous item that means the same, there's nothing to tell apart.
+        if itemCursor == 0 || SentenceEmbedder.similarity(itemVectors[itemCursor], itemVectors[itemCursor - 1]) > 0.95 {
+            finalTopicHeard = true
+        } else if let spoken = try? embedder.embed(recent.suffix(12).joined(separator: " ")) {
+            let last = SentenceEmbedder.similarity(spoken, itemVectors[itemCursor])
+            let previous = SentenceEmbedder.similarity(spoken, itemVectors[itemCursor - 1])
+            if last - previous > topicTracker.margin { finalTopicHeard = true }
+        }
+        armLastItem()
+    }
+
+    /// The last item has nothing after it, so it ticks off once you've talked about it and gone quiet.
+    private func armLastItem() {
+        lastItemTimer?.invalidate()
+        guard followsParaphrasing, itemCursor == items.count - 1, finalTopicHeard, wordsForItem.count >= 6 else { return }
+        let index = itemCursor
+        lastItemTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.itemCursor == index, self.isListening else { return }
+                self.checkOff()
+            }
+        }
+    }
+
     /// Asks the model after a short pause in speech, or every couple of seconds while you keep talking.
+    /// A couple of new words, like "moving on", wait for the pause.
     private func scheduleJudge() {
-        guard ChecklistJudge.isReady, wordsForItem.count >= judgedWordCount + 3 else { return }
+        guard ChecklistJudge.isReady, wordsForItem != judgedWords else { return }
         judgeTimer?.invalidate()
-        let delay = Date().timeIntervalSince(lastJudged) > 2.5 ? 0 : 0.7
+        let fewNewWords = wordsForItem.count < judgedWords.count + 3
+        let delay = !fewNewWords && Date().timeIntervalSince(lastJudged) > 2.5 ? 0 : 0.7
         judgeTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.judge() }
         }
@@ -273,36 +360,39 @@ final class Prompter: ObservableObject {
         guard !judging, checkingItem == nil, itemCursor < items.count else { return }
         let index = itemCursor
         let words = recentWords
-        guard words.count >= 3 else { return }
+        guard !words.isEmpty else { return }
         judging = true
-        judgedWordCount = wordsForItem.count
+        judgedWords = wordsForItem
         lastJudged = Date()
         let previous = index > 0 ? items[index - 1] : nil
-        let next = index + 1 < items.count ? items[index + 1] : nil
+        let upcoming = Array(items[index..<min(index + 3, items.count)])
         Task {
-            let covered = await ChecklistJudge.covers(
-                item: items[index], previous: previous, next: next, transcript: words.joined(separator: " ")
+            let done = await ChecklistJudge.itemsDone(
+                upcoming: upcoming, previous: previous, transcript: words.joined(separator: " ")
             )
             judging = false
-            if covered == true, index == itemCursor, checkingItem == nil {
-                checkOff()
-            } else if wordsForItem.count >= judgedWordCount + 3 {
+            if let done, done > 0, index == itemCursor, checkingItem == nil {
+                checkOff(through: index + done - 1)
+            } else if wordsForItem != judgedWords {
                 scheduleJudge()
             }
         }
     }
 
-    private func checkOff() {
+    /// Ticks off the current item, and every item up to `last` if you've already covered those too.
+    /// `carrying` words still count toward the item after, such as the ones that introduced it.
+    private func checkOff(through last: Int? = nil, carrying: [String] = []) {
         guard checkingItem == nil, itemCursor < items.count else { return }
         let index = itemCursor
         checkingItem = index
         resetHeard()
+        heardForItem = carrying
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, self.checkingItem == index else { return }
                 self.checkingItem = nil
-                self.itemCursor = index + 1
-                if self.isFinished { self.pauseWhenDone() }
+                self.itemCursor = min(max(last ?? index, index), self.items.count - 1) + 1
+                if self.isFinished { self.pauseWhenDone() } else { self.armLastItem() }
             }
         }
     }
@@ -317,7 +407,10 @@ final class Prompter: ObservableObject {
     private func resetHeard() {
         heardForItem = []
         staleInUtterance = utterance.count
-        judgedWordCount = 0
+        judgedWords = []
+        topicTracker.reset()
+        lastItemTimer?.invalidate()
+        finalTopicHeard = false
         judgeTimer?.invalidate()
     }
 

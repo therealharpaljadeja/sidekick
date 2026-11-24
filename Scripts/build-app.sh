@@ -18,6 +18,7 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp LICENSE "$APP/Contents/Resources/LICENSE"
 cp Resources/Fonts/*.ttf Resources/Fonts/OFL.txt "$APP/Contents/Resources/Fonts/"
+cp -R Resources/Model/SentenceEmbedding.mlmodelc Resources/Model/vocab.txt "$APP/Contents/Resources/"
 
 SIGN_FLAGS=(--force --sign "${SIGN_IDENTITY:--}")
 [[ -n "${SIGN_IDENTITY:-}" ]] && SIGN_FLAGS+=(--options runtime --timestamp --entitlements Resources/Sidekick.entitlements)

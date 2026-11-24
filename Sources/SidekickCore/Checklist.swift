@@ -30,6 +30,18 @@ public enum TopicMatcher {
         "through", "into", "from", "this", "that", "these", "those", "be", "have", "can", "will",
     ]
 
+    private static let wrapUps = [
+        "moving on", "moving onto", "move on", "move onto",
+        "im done", "i am done", "done with this", "thats it for",
+    ]
+
+    /// True if the words wrap up a talking point out loud, like "moving on" or "I'm done".
+    public static func wrapsUp(_ words: [String]) -> Bool {
+        let tokens = words.joined(separator: " ").lowercased().split(whereSeparator: \.isWhitespace)
+        let text = " " + tokens.map { $0.filter(\.isLetter) }.joined(separator: " ") + " "
+        return wrapUps.contains { text.contains(" \($0) ") }
+    }
+
     public static func keywords(for item: String) -> [String] {
         var seen = Set<String>()
         return lemmas(in: item, contentOnly: true).filter { !ignored.contains($0) && seen.insert($0).inserted }

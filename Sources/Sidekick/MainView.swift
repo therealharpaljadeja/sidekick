@@ -167,6 +167,12 @@ private struct ChecklistPane: View {
             .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Theme.surface))
             .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.hairline, lineWidth: 1))
 
+            if prompter.followsParaphrasing {
+                Text("Follows what you say, even paraphrased, and moves on when you start a later item. ⌥⌘→ ticks an item off by hand.")
+                    .font(Theme.intern(12))
+                    .foregroundColor(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
             switch ChecklistJudge.status {
             case .ready:
                 Text("Understands paraphrasing with Apple Intelligence, on this Mac. ⌥⌘→ ticks an item off by hand.")
@@ -187,6 +193,7 @@ private struct ChecklistPane: View {
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.text.opacity(0.5), lineWidth: 1))
+            }
             }
 
             if let message = prompter.message {

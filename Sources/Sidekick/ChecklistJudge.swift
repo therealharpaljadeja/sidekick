@@ -38,11 +38,12 @@ enum ChecklistJudge {
         #endif
     }
 
+    /// How many of `upcoming` you're done with, starting from the current item: 0 while you're still on it.
     /// `nil` when the model can't answer, so the caller can rely on key words instead.
-    static func covers(item: String, previous: String?, next: String?, transcript: String) async -> Bool? {
+    static func itemsDone(upcoming: [String], previous: String?, transcript: String) async -> Int? {
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *), isReady {
-            return await AIJudge.shared.covers(item: item, previous: previous, next: next, transcript: transcript)
+            return await AIJudge.shared.itemsDone(upcoming: upcoming, previous: previous, transcript: transcript)
         }
         #endif
         return nil
@@ -53,10 +54,12 @@ enum ChecklistJudge {
 @available(macOS 26.0, *)
 @Generable
 private struct TopicCheck {
-    @Guide(description: "A few words on what the presenter is talking about or doing right now.")
+    @Guide(description: "A few words on what the presenter is talking about or doing at the end of the transcript.")
     var nowTalkingAbout: String
-    @Guide(description: "True if the presenter is on the current item, has said they're done with it, or has moved on to the item after it.")
-    var covered: Bool
+    @Guide(description: "The number of the checklist item they're talking about or doing at the end of the transcript, or 0 if it's none of them.", .range(0...3))
+    var onItem: Int
+    @Guide(description: "True if, at the end of the transcript, they wrap up item 1, like \"so that's…\", \"that's it for…\" or \"moving on\".")
+    var wrappedUpItemOne: Bool
 }
 
 @available(macOS 26.0, *)
@@ -66,38 +69,43 @@ private final class AIJudge {
 
     private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Sidekick", category: "checklist")
 
+    private static let latestWords = 30
+
     private static let instructions = """
     You follow a presenter recording a video demo from an ordered checklist of talking points. \
-    You get the current checklist item, its neighbours, and a live speech-recognition transcript of what \
-    the presenter said since the current item came up. The transcript has no punctuation and may contain \
-    recognition mistakes. The presenter paraphrases and rarely uses the item's words, so judge the meaning. \
-    Answer covered = true if any of these hold: \
-    they are talking about or doing the current item, even briefly or in their own words; \
-    they introduce it ("now let me show you…", "next up…"); \
-    they say they're done with it ("so that's…", "that's it for…", "moving on"); \
-    or they have moved on to the item after it. \
-    Answer false only if they are still on the previous item or saying something unrelated to the current item.
+    You get the next few checklist items, numbered from 1, and the last few sentences of a live \
+    speech-recognition transcript. The transcript has no punctuation and may contain recognition mistakes, \
+    such as a name heard as a similar-sounding word. The presenter paraphrases, so judge the meaning, \
+    not the exact words. Say which numbered item they're talking about or doing at the end of the transcript. \
+    Pick an item only if they're on it now, not if they only say they'll get to it later. \
+    Answer 0 for small talk or a topic that isn't on the list. Also say whether they just wrapped up item 1.
     """
 
     func prewarm() {
         LanguageModelSession(instructions: Self.instructions).prewarm()
     }
 
-    func covers(item: String, previous: String?, next: String?, transcript: String) async -> Bool? {
+    func itemsDone(upcoming: [String], previous: String?, transcript: String) async -> Int? {
         // A fresh session per check keeps each verdict independent and the context small.
         let session = LanguageModelSession(instructions: Self.instructions)
         var prompt = ""
-        if let previous { prompt += "Previous item (already done): \"\(previous)\"\n" }
-        prompt += "Current item: \"\(item)\"\n"
-        if let next { prompt += "Item after it: \"\(next)\"\n" }
-        prompt += "Transcript: \"\(transcript)\""
+        if let previous { prompt += "Already done: \"\(previous)\"\n" }
+        prompt += "Checklist:\n"
+        for (number, item) in upcoming.enumerated() { prompt += "\(number + 1). \(item)\n" }
+        let words = transcript.split(separator: " ").suffix(Self.latestWords)
+        prompt += "Transcript: \"\(words.joined(separator: " "))\""
         do {
             let response = try await session.respond(
                 to: prompt, generating: TopicCheck.self, options: GenerationOptions(temperature: 0)
             )
             let check = response.content
-            Self.log.debug("\(check.covered ? "covered" : "not yet", privacy: .public) · \(item, privacy: .public) · heard “\(transcript, privacy: .public)” · model: \(check.nowTalkingAbout, privacy: .public)")
-            return check.covered
+            let onItem = min(max(check.onItem, 0), upcoming.count)
+            let done = max(onItem - 1, check.wrappedUpItemOne ? 1 : 0)
+            Self.log.debug("""
+            ticks \(done, privacy: .public) · on item \(onItem, privacy: .public) · wrapped up item 1: \(check.wrappedUpItemOne, privacy: .public) · \
+            model: \(check.nowTalkingAbout, privacy: .public) · sent: \(prompt.replacingOccurrences(of: "\n", with: " | "), privacy: .public)
+            """)
+            return done
         } catch {
             Self.log.error("Apple Intelligence failed: \(error.localizedDescription, privacy: .public)")
             return nil
