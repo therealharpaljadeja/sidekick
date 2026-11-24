@@ -92,6 +92,12 @@ final class ChecklistTests: XCTestCase {
         XCTAssertEqual(moved, 1)
     }
 
+    func testTrackerMovesToNextWhenSkipIsTooWeak() {
+        var tracker = TopicTracker(wordsToHold: 2)
+        XCTAssertEqual(tracker.update(scores: [0.50, 0.70, 0.72], heard: 1), 0)
+        XCTAssertEqual(tracker.update(scores: [0.50, 0.70, 0.72], heard: 2), 1)
+    }
+
     func testTokenizerMatchesBert() throws {
         let vocab = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("../../Resources/Model/vocab.txt").standardizedFileURL

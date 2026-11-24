@@ -24,11 +24,10 @@ public struct TopicTracker: Sendable {
     /// `scores[0]` is the current item and the rest are the items after it; `heard` counts the words
     /// heard so far for the current item. Returns how many items you've moved past (0 to stay).
     public mutating func update(scores: [Float], heard: Int) -> Int {
-        guard scores.count > 1,
-              let best = scores.indices.dropFirst().max(by: { scores[$0] < scores[$1] }),
-              scores[best] - scores[0] > margin,
-              scores[best] >= (best > 1 ? skipFloor : floor)
-        else { candidate = 0; return 0 }
+        let eligible = scores.indices.dropFirst().filter {
+            scores[$0] - scores[0] > margin && scores[$0] >= ($0 > 1 ? skipFloor : floor)
+        }
+        guard let best = eligible.max(by: { scores[$0] < scores[$1] }) else { candidate = 0; return 0 }
         if candidate != best { candidate = best; since = heard }
         guard heard - since + 1 >= wordsToHold else { return 0 }
         candidate = 0
