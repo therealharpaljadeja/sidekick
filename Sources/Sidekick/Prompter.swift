@@ -1,3 +1,4 @@
+import os
 import Combine
 import Foundation
 import SidekickCore
@@ -35,6 +36,19 @@ final class Prompter: ObservableObject {
     private var lastJudged = Date.distantPast
     private var judging = false
     private var judgeTimer: Timer?
+    private var itemVectors: [[Float]] = []
+    private var topicTracker = TopicTracker()
+    private var lastItemTimer: Timer?
+
+    /// The bundled sentence model, which follows paraphrased checklist items on any Mac.
+    static let embedder: SentenceEmbedder? = {
+        guard let model = Bundle.main.url(forResource: "SentenceEmbedding", withExtension: "mlmodelc"),
+              let vocabulary = Bundle.main.url(forResource: "vocab", withExtension: "txt")
+        else { return nil }
+        return try? SentenceEmbedder(model: model, vocabulary: vocabulary)
+    }()
+
+    private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Sidekick", category: "checklist")
 
     var isFinished: Bool {
         switch mode {
@@ -90,6 +104,7 @@ final class Prompter: ObservableObject {
         }.count
         items = parsed
         itemKeywords = parsed.map(TopicMatcher.keywords(for:))
+        itemVectors = Self.embedder.map { embedder in parsed.map { (try? embedder.embed($0)) ?? [] } } ?? []
         itemCursor = kept
         checkingItem = nil
         resetHeard()
@@ -258,6 +273,9 @@ final class Prompter: ObservableObject {
         let newest = utterance.dropFirst(min(staleInUtterance, utterance.count)).suffix(8)
         if TopicMatcher.wrapsUp(Array(newest)) { return checkOff() }
         let recent = recentWords
+        if let embedder = Self.embedder, itemVectors.count == items.count {
+            return followTopic(with: embedder, recent: recent)
+        }
         let spoken = TopicMatcher.lemmas(in: recent.joined(separator: " "))
         // With Apple Intelligence, key words only show you've started an item, so the model decides when it's done.
         if !ChecklistJudge.isReady, TopicMatcher.covers(keywords: itemKeywords[itemCursor], spoken: spoken, strict: false) {
@@ -275,6 +293,32 @@ final class Prompter: ObservableObject {
             }
         }
         scheduleJudge()
+    }
+
+    /// Moves on once your latest words clearly match a later item better than the current one.
+    private func followTopic(with embedder: SentenceEmbedder, recent: [String]) {
+        let upcoming = Array(itemCursor..<min(itemCursor + 3, items.count))
+        if upcoming.count > 1, let spoken = try? embedder.embed(recent.suffix(12).joined(separator: " ")) {
+            let scores = upcoming.map { SentenceEmbedder.similarity(spoken, itemVectors[$0]) }
+            let moved = topicTracker.update(scores: scores, heard: wordsForItem.count)
+            Self.log.debug("""
+            \(moved > 0 ? "moved on" : "on", privacy: .public) · \(self.items[self.itemCursor], privacy: .public) · \
+            scores \(scores.map { String(format: "%.2f", $0) }.joined(separator: " "), privacy: .public) · \
+            heard “\(recent.suffix(12).joined(separator: " "), privacy: .public)”
+            """)
+            if moved > 0 { return checkOff(through: itemCursor + moved - 1) }
+        }
+        // The last item has nothing after it, so it ticks off once you've talked about it and gone quiet.
+        if itemCursor == items.count - 1, wordsForItem.count >= 10 {
+            let index = itemCursor
+            lastItemTimer?.invalidate()
+            lastItemTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.itemCursor == index, self.isListening else { return }
+                    self.checkOff()
+                }
+            }
+        }
     }
 
     /// Asks the model after a short pause in speech, or every couple of seconds while you keep talking.
@@ -341,6 +385,8 @@ final class Prompter: ObservableObject {
         heardForItem = []
         staleInUtterance = utterance.count
         judgedWords = []
+        topicTracker.reset()
+        lastItemTimer?.invalidate()
         judgeTimer?.invalidate()
     }
 
